@@ -37,6 +37,7 @@ static std::vector<SemanticType> current_parameter_types;
 static SemanticType last_expression_type = SEM_UNKNOWN;
 static ExpressionSemantic last_expression_semantic = { SEM_UNKNOWN, 0, 0, 0 };
 static SemanticType current_function_return_type = SEM_UNKNOWN;
+static int current_function_has_return = 0;  //当前函数体里是否出现过return语句
 static int current_type_is_const = 0;
 static int semantic_scope_depth = 0;
 static int function_body_reuses_scope = 0;
@@ -464,10 +465,25 @@ status funcDef(FILE* fp, CTree& T)  //语法单位<函数定义>子程序
 	f.nodes[0].indent = 1;
 	f.nodes[0].firstchild = NULL;
 	SemanticType previous_return_type = current_function_return_type;
+	int previous_has_return = current_function_has_return;
+	int errors_before_body = parse_error_count;
 	current_function_return_type = function_return_type;
+	current_function_has_return = 0;
 	function_body_reuses_scope = 1;
-	if (!CompStat(fp, s)) return ERROR;
+	if (!CompStat(fp, s)) {
+		current_function_return_type = previous_return_type;
+		current_function_has_return = previous_has_return;
+		return ERROR;
+	}
+	int function_has_return = current_function_has_return;
 	current_function_return_type = previous_return_type;
+	current_function_has_return = previous_has_return;
+	//函数体本身没报别的错才追加这条，避免一个错误引出连环提示
+	if (!function_has_return && function_return_type != SEM_VOID &&
+		parse_error_count == errors_before_body) {
+		//函数体已完整解析，只记录错误保留语法树，继续解析后面的定义
+		record_parse_error("函数缺少return语句");
+	}
 	if (!InsertChild(f, f.r, 1, s)) return ERROR;
 	if(!InsertChild(T, T.r, 3, f))return ERROR;
 	return OK;
@@ -882,6 +898,7 @@ status Statement(FILE* fp, CTree& T)  //语法单位<语句>子程序
 		return OK;
 	}
 	else if (w == RETURN) {
+		current_function_has_return = 1;  //函数体里出现过return关键字
 		T.n = 1; T.r = 0;
 		T.nodes[0].data = (char*)malloc((strlen("return语句：") + 1) * sizeof(char));
 		strcpy(T.nodes[0].data, "return语句：");

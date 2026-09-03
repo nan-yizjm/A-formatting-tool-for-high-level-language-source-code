@@ -1,6 +1,12 @@
+/* 助教临时测试的 */
+0xxx777
+while@
+4anum
+
+
 /* 01 预处理：尖括号头文件、引号头文件 */
-#include <stdio.h>
-#include "stdlib.h"
+//#include <stdio.h>
+//#include "stdlib.h"
 
 /* 02 单Token宏声明 */
 #define DEMO_NUMBER 42
