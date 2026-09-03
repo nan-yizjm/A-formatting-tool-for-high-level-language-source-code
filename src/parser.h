@@ -34,6 +34,6 @@ status LocVarList(FILE* fp, CTree& T);//语法单位<局部变量定义序列>�
 status LocVarDef(FILE* fp, CTree& T);//语法单位<局部变量定义>子程序
 status StatList(FILE* fp, CTree& T);//语法单位<语句序列>子程序
 status Statement(FILE* fp, CTree& T);//语法单位<语句>子程序
-status exp(FILE* fp, CTree& T, int endsym);//语法单位<表达式>子程序
+status exp(FILE* fp, CTree& T, int endsym, int alt_endsym = -1);//语法单位<表达式>子程序
 char precede(char* a, char* b);//比较a与b的优先级
 status PrintTree(char* data, int indent); //打印缩进

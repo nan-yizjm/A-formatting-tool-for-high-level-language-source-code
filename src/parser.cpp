@@ -7,6 +7,7 @@ char tokenText0[100]; //储存第一个函数名或者变量名
 char parser_error[100]; //储存语法错误说明
 int indent0 = 0;  //初始化缩进值
 queue<print> printList; //用于方便打印缩进
+static int last_expression_end = -1;
 
 static int is_type_token(int token)
 {
@@ -166,6 +167,17 @@ status VarList(FILE* fp, CTree& T)  //语法单位<变量序列>子程序
 		strcat(c.nodes[0].data, tokenText0);
 		c.nodes[0].indent = 1;
 		c.nodes[0].firstchild = NULL;
+	}
+	if (w == EQUAL_TO) {
+		CTree initializer;
+		w = gettoken(fp);
+		if (w == COMMA || w == SEMI) {
+			strcpy(parser_error, "声明初始化缺少表达式");
+			return ERROR;
+		}
+		if (!exp(fp, initializer, SEMI, COMMA)) return ERROR;
+		if (!InsertChild(c, c.r, 1, initializer)) return ERROR;
+		w = last_expression_end;
 	}
 	if (!InsertChild(T, T.r, 1, c))	return ERROR;//识别的变量结点作为T的第一个孩子
 	if (w != COMMA && w != SEMI) {
@@ -631,7 +643,7 @@ status Statement(FILE* fp, CTree& T)  //语法单位<语句>子程序
 
 }
 
-status exp(FILE* fp, CTree& T, int endsym)//语法单位<表达式>子程序
+status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达式>子程序
 {
 	//已经读入了第一个单词在w中
 	SqStack op;		//运算符栈
@@ -645,6 +657,7 @@ status exp(FILE* fp, CTree& T, int endsym)//语法单位<表达式>子程序
 	T.nodes[0].indent = 1;
 	T.nodes[0].firstchild = NULL;
 	int error = 0;
+	last_expression_end = -1;
 	node->n = 1; node->r = 0; //设立起止符号
 	node->nodes[0].data = (char*)malloc((strlen("#") + 1) * sizeof(char));
 	strcpy(node->nodes[0].data, "#");
@@ -700,11 +713,17 @@ status exp(FILE* fp, CTree& T, int endsym)//语法单位<表达式>子程序
 				Push(opn, node);
 				break;
 			default:
-				if (w == endsym) w = POUND; //遇到结束标记），w被替换成#
+				if (w == endsym || w == alt_endsym) {
+					last_expression_end = w;
+					w = POUND;
+				} //遇到结束标记，w被替换成#
 				else error++;
 			}
 		}
-		else if (w == endsym) w = POUND;//遇到结束标记分号，w被替换成#
+		else if (w == endsym || w == alt_endsym) {
+			last_expression_end = w;
+			w = POUND;
+		}//遇到结束标记，w被替换成#
 		else {
 			if (endsym == SEMI && (w == RL || w == EOF))
 				strcpy(parser_error, "表达式语句缺少分号");
