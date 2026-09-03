@@ -240,18 +240,19 @@ status funcDef(FILE* fp, CTree& T)  //语法单位<函数定义>子程序
 	if (!InsertChild(T, T.r, 2, p)) return ERROR;
 	w = gettoken(fp);
 	if (w != SEMI && w != LL) return ERROR;
+	if (w == SEMI) {
+		strcpy(T.nodes[0].data, "函数声明：");
+		w = gettoken(fp);
+		return OK;
+	}
 	f.n = 1; f.r = 0;  //生成函数体结点
 	f.nodes[0].data = (char*)malloc((strlen("函数体：") + 1) * sizeof(char));
 	strcpy(f.nodes[0].data, "函数体：");
 	f.nodes[0].indent = 1;
 	f.nodes[0].firstchild = NULL;
-	if (w == LL)  //存在函数体则判断复合语句
-	{
-		if (!CompStat(fp, s)) return ERROR;
-		if (!InsertChild(f, f.r, 1, s)) return ERROR;
-		if(!InsertChild(T, T.r, 3, f))return ERROR;
-	}
-//若是函数声明则直接返回OK
+	if (!CompStat(fp, s)) return ERROR;
+	if (!InsertChild(f, f.r, 1, s)) return ERROR;
+	if(!InsertChild(T, T.r, 3, f))return ERROR;
 	return OK;
 }
 
