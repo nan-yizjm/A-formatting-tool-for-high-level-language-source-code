@@ -4,7 +4,7 @@ status PrintFile(FILE* fp) {
 	int indentnum=0, line = 1;
 	int i; char c;
 	FILE* print_fp;
-	char filename[30] = "C_print_file.txt";
+	char filename[30] = "../output/C_print_file.txt";
 	print_fp = fopen(filename, "w");
 	while (!printList.empty())
 	{

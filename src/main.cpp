@@ -4,16 +4,26 @@
 #include"preprocess.h"	// 预处理：宏、头文件、注释
 #include"printfile.h"	// 输出缩进后的文件
 
+#include <stdlib.h>
 #ifdef _WIN32
+#include <direct.h>
 extern "C" __declspec(dllimport)
 int __stdcall SetConsoleOutputCP(unsigned int codePage);
+#define CLEAR_SCREEN() system("cls")
+#define MAKE_DIR(p) _mkdir(p)
+#else
+#include <sys/stat.h>
+#define CLEAR_SCREEN() system("clear")
+#define MAKE_DIR(p) mkdir(p, 0777)
 #endif
 
 int main() {
 #ifdef _WIN32
     SetConsoleOutputCP(65001);
 #endif
+	MAKE_DIR("../output");
 	char filename[30];
+	char filepath[60];
 	int ch = 1;
 	int w;
 	CTree T;
@@ -26,10 +36,11 @@ int main() {
 	int error_line_num=0;//记录错误总个数
 	int i;//用于循环
 Choosefile:
-	system("cls");
+	CLEAR_SCREEN();
 	printf("输入文件名：");
-	scanf("%s", filename);
-	if (!(fp = fopen(filename, "r")))
+	if (scanf("%s", filename) != 1) { getchar(); getchar(); goto Choosefile; }
+	sprintf(filepath, "../input/%s", filename);
+	if (!(fp = fopen(filepath, "r")))
 	{
 		printf("...选择文件错误，请重新选择...\n");
 		getchar(); getchar();
@@ -39,16 +50,16 @@ Choosefile:
 	
 	while (ch)
 	{
-		system("cls");
+		CLEAR_SCREEN();
 		printf("基于高级语言源程序格式处理工具菜单\n1. 词法分析\n2. 语法分析\n3. 缩进编排\n4. 选择文件\n0. 退出程序\n请选择：");
 		scanf("%d", &ch);
-		system("cls");
+		CLEAR_SCREEN();
 		switch (ch)
 		{
 		case 1:
 			error_line_num = 1;
 			line_num = 1;  //行数初始化为1
-			if (!(fp = fopen(filename, "r"))) 
+			if (!(fp = fopen(filepath, "r"))) 
 			{ printf("...选择文件错误，请重新选择...\n"); 
 			getchar(); getchar(); 
 			break; 
@@ -65,9 +76,9 @@ Choosefile:
 				getchar(); getchar();
 				return 0;
 			}
-			mid_fp = fopen("C_mid_file.txt", "r");
+			mid_fp = fopen("../output/C_mid_file.txt", "r");
 			line_num = 1;  //行数初始化为1
-			system("cls");
+			CLEAR_SCREEN();
 			printf("\n");
 			printf("	单词类别				单词值\n");
 			while (!feof(mid_fp))
@@ -202,7 +213,7 @@ Choosefile:
 		case 2:
 			printf("...正在预编译文件...\n");
 			line_num = 1;  //行数初始化为1
-			fp = fopen(filename, "r");
+			fp = fopen(filepath, "r");
 			if (pre_process(fp))
 			{
 				printf("预编译成功！按任意键继续...\n");
@@ -214,9 +225,9 @@ Choosefile:
 				getchar(); getchar();
 				return 0;
 			}
-			mid_fp = fopen("C_mid_file.txt", "r");
+			mid_fp = fopen("../output/C_mid_file.txt", "r");
 			line_num = 1;  //行数初始化为1
-			system("cls");
+			CLEAR_SCREEN();
 			if (!program(mid_fp, T))
 			{
 				printf("发生生成错误！错误行号：%d\n", line_num);
@@ -232,7 +243,7 @@ Choosefile:
 			break;
 		case 3:
 			line_num = 1;  //行数初始化为1
-			fp = fopen(filename, "r");
+			fp = fopen(filepath, "r");
 			if (!pre_process(fp))
 			{
 				printf("预编译失败！退出系统！请检查错误！\n");
@@ -240,7 +251,7 @@ Choosefile:
 				return 0;
 			}
 			line_num = 1;
-			mid_fp = fopen("C_mid_file.txt", "r");
+			mid_fp = fopen("../output/C_mid_file.txt", "r");
 			if (!program(mid_fp, T))
 			{
 				printf("程序存在语法错误！无法缩进打印！\n");
@@ -249,7 +260,7 @@ Choosefile:
 			}
 			else { printf("程序语法正确！\n"); }
 			fclose(fp);
-			fp = fopen(filename, "r");
+			fp = fopen(filepath, "r");
 			PrintFile(fp);
 			printf("缩进编排文件生成成功！\n");
 			getchar(); getchar();

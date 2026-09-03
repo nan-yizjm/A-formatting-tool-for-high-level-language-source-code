@@ -14,7 +14,7 @@ int gettoken(FILE* fp) {
 	int i=0; //用于做token_text的存储
 	int j=0; //用于与关键字做比对
 	
-	while (( c = fgetc(fp)) == ' ' || c == '\n'|| c == '\t'||c==EOF)  //跳过空白符和制表符
+	while (( c = fgetc(fp)) == ' ' || c == '\n'|| c == '\t'|| c == '\r' ||c==EOF)  //跳过空白符和制表符
 	{
 		if (c == '\n') line_num++;	//读取换行符时计数
 		if (c == EOF) return EOF;
@@ -508,10 +508,17 @@ station2://临时判断是否是*/的情况
 						token_text[i++] = c;
 						c = fgetc(fp);
 					} while ((c != '"' )&& (c != '\n' )&& (c != EOF));
-					if (c == '"') { token_text[i++] = c; token_text[i] == '\0'; return STRING_CONST; }
+					if (c == '"') { token_text[i++] = c; token_text[i] = '\0'; return STRING_CONST; }
 					else goto stationERROR;
 				}
-				else if (c == '\n') { line_num++; token_text[i++] = c; }
+				else if (c == '\n' || c == '\r') {  //反斜杠续行，兼容 CRLF 换行
+					if (c == '\r') {
+						c = fgetc(fp);
+						if (c != '\n') ungetc(c, fp);
+						else c = '\n';
+					}
+					line_num++; token_text[i++] = c;
+				}
 				else token_text[i++] = c;
 			}
 			else if (c == '\n') { //判断直接换行情况【亮点】

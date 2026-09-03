@@ -9,6 +9,8 @@ queue<print> printList; //用于方便打印缩进
 status program(FILE* fp, CTree& T)  //语法单位<程序>的子程序
 {
 	CTree c;
+	indent0 = 0;                       //重置缩进值，防止多次运行之间状态泄漏
+	while (!printList.empty()) printList.pop();  //清空打印队列
 	struct print elem = { indent0,line_num };
 	printList.push(elem);//存入程序的缩进值
 	w = gettoken(fp);

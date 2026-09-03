@@ -13,7 +13,7 @@ status pre_process(FILE* fp) {
 	int flag=0;//判断语句中是否出现define的定义
 	FILE* mid_fp;
 	char filename[50];
-	strcpy(filename, "C_mid_file.txt"); //中间文件
+	strcpy(filename, "../output/C_mid_file.txt"); //中间文件
 	mid_fp = fopen(filename, "w");
 	w = gettoken(fp);
 	do {
