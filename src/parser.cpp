@@ -1,4 +1,5 @@
 #include"parser.h"
+#include<string>
 
 int w;  //获得gettoken函数的返回值即读入的单词种类编码
 char kind[100]; //储存类型关键字
@@ -6,6 +7,59 @@ char tokenText0[100]; //储存第一个函数名或者变量名
 char parser_error[100]; //储存语法错误说明
 int indent0 = 0;  //初始化缩进值
 queue<print> printList; //用于方便打印缩进
+
+static int is_type_token(int token)
+{
+	return token == VOID || token == CHAR || token == SHORT || token == INT ||
+		token == LONG || token == SIGNED || token == UNSIGNED ||
+		token == FLOAT || token == DOUBLE;
+}
+
+static status parse_type_specifier(FILE* fp, int allow_void)
+{
+	int void_count = 0, char_count = 0, short_count = 0, int_count = 0;
+	int long_count = 0, signed_count = 0, unsigned_count = 0;
+	int float_count = 0, double_count = 0, total = 0;
+	std::string spelling;
+	while (is_type_token(w)) {
+		if (!spelling.empty()) spelling += " ";
+		spelling += token_text;
+		total++;
+		switch (w) {
+		case VOID: void_count++; break;
+		case CHAR: char_count++; break;
+		case SHORT: short_count++; break;
+		case INT: int_count++; break;
+		case LONG: long_count++; break;
+		case SIGNED: signed_count++; break;
+		case UNSIGNED: unsigned_count++; break;
+		case FLOAT: float_count++; break;
+		case DOUBLE: double_count++; break;
+		}
+		w = gettoken(fp);
+	}
+
+	int valid = total > 0 && signed_count <= 1 && unsigned_count <= 1 &&
+		!(signed_count && unsigned_count);
+	if (void_count) valid = valid && allow_void && total == 1;
+	else if (float_count) valid = valid && float_count == 1 && total == 1;
+	else if (double_count)
+		valid = valid && double_count == 1 && long_count <= 1 &&
+			total == double_count + long_count;
+	else if (char_count)
+		valid = valid && char_count == 1 && total == char_count + signed_count + unsigned_count;
+	else
+		valid = valid && int_count <= 1 && short_count <= 1 && long_count <= 1 &&
+			!(short_count && long_count) &&
+			total == int_count + short_count + long_count + signed_count + unsigned_count;
+
+	if (!valid) {
+		strcpy(parser_error, "非法的类型说明符组合");
+		return ERROR;
+	}
+	strcpy(kind, spelling.c_str());
+	return OK;
+}
 
 status program(FILE* fp, CTree& T)  //语法单位<程序>的子程序
 {
@@ -47,10 +101,7 @@ status ExtDefList(FILE* fp, CTree& T) //语法单位<外部定义序列>的子�
 status ExtDef(FILE* fp, CTree& T)  //语法单位<外部定义>的子程序
 {
 	status flag;
-	if (w != INT && w != LONG && w != SHORT && w != SIGNED && w != UNSIGNED &&
-		w != FLOAT && w != DOUBLE && w != CHAR &&w!=VOID) return ERROR;
-	strcpy(kind, token_text);			//保存类型关键字
-	w = gettoken(fp);
+	if (!parse_type_specifier(fp, 1)) return ERROR;
 	if (w != IDENT) return ERROR;
 	strcpy(tokenText0, token_text);		//保存第一个变量名或函数名到tokenText0
 	w = gettoken(fp);
@@ -226,16 +277,14 @@ status FormParDef(FILE* fp, CTree& T)  //语法单位<形参>子程序
 	strcpy(T.nodes[0].data, "形参：");
 	T.nodes[0].indent = 1;
 	T.nodes[0].firstchild = NULL;	
-	if (w != INT && w != LONG && w != SHORT && w != SIGNED && w != UNSIGNED &&
-		w != FLOAT && w != DOUBLE && w != CHAR) return ERROR;
+	if (!parse_type_specifier(fp, 0)) return ERROR;
 	c.n = 1; c.r = 0;		//生成形参类型结点
-	c.nodes[0].data = (char*)malloc((strlen(token_text) + strlen("类型：") + 1) * sizeof(char));
+	c.nodes[0].data = (char*)malloc((strlen(kind) + strlen("类型：") + 1) * sizeof(char));
 	strcpy(c.nodes[0].data, "类型：");
-	strcat(c.nodes[0].data, token_text);
+	strcat(c.nodes[0].data, kind);
 	c.nodes[0].indent = 1;
 	c.nodes[0].firstchild = NULL;
 	InsertChild(T, T.r, 1, c);
-	w = gettoken(fp);
 	if (w != IDENT) return ERROR;
 	p.n = 1; p.r = 0;   //生成形参变量结点
 	p.nodes[0].data = (char*)malloc((strlen(token_text) + strlen("ID: ") + 1) * sizeof(char));
@@ -261,7 +310,7 @@ status CompStat(FILE* fp, CTree& T)  //语法单位<复合语句>子程序
 	w = gettoken(fp);
 	elem = { ++indent0,line_num };
 	printList.push(elem);  //添加缩进值
-	if (w == INT || w == LONG || w == SHORT || w == SIGNED || w == UNSIGNED|| w == FLOAT || w == DOUBLE || w == CHAR)
+	if (is_type_token(w))
 	{
 		if (!LocVarList(fp, c)) return ERROR;
 		if (!InsertChild(T, T.r, 1, c)) return ERROR;
@@ -288,7 +337,7 @@ status LocVarList(FILE* fp, CTree& T)  //语法单位<局部变量定义序列>�
 {
 	CTree c; CTree p;//c生成局部变量定义子树，p生成可能存在的下一个局部变量定义序列子树
 	status flag;
-	if (w != INT && w != LONG && w != SHORT && w != SIGNED && w != UNSIGNED && w != FLOAT && w != DOUBLE && w != CHAR)
+	if (!is_type_token(w))
 		return INFEASIBLE;
 	//读到的后继单词不为类型说明符时，变量定义序列结束
 	T.n = 1;  T.r = 0;  //生成局部变量定义序列结点
@@ -307,7 +356,7 @@ status LocVarList(FILE* fp, CTree& T)  //语法单位<局部变量定义序列>�
 status LocVarDef(FILE* fp, CTree& T)//语法单位<局部变量定义>子程序
 {
 	CTree c;  CTree p; //c生成局部变量类型结点,p生成变量序列子树
-	if (w != INT && w != LONG && w != SHORT && w != SIGNED && w != UNSIGNED && w != FLOAT && w != DOUBLE && w != CHAR) return ERROR;
+	if (!parse_type_specifier(fp, 0)) return ERROR;
 	T.n = 1; T.r = 0;		//生成局部变量定义结点
 	T.nodes[0].data = (char*)malloc((strlen("局部变量定义：") + 1) * sizeof(char));
 	strcpy(T.nodes[0].data, "局部变量定义：");
@@ -315,13 +364,12 @@ status LocVarDef(FILE* fp, CTree& T)//语法单位<局部变量定义>子程序
 	T.nodes[0].firstchild = NULL;	
 	
 	c.n = 1; c.r = 0;		//生成局部变量类型结点
-	c.nodes[0].data = (char*)malloc((strlen(token_text) + strlen("类型：") + 1) * sizeof(char));
+	c.nodes[0].data = (char*)malloc((strlen(kind) + strlen("类型：") + 1) * sizeof(char));
 	strcpy(c.nodes[0].data, "类型：");
-	strcat(c.nodes[0].data, token_text);
+	strcat(c.nodes[0].data, kind);
 	c.nodes[0].indent = 1;
 	c.nodes[0].firstchild = NULL;
 	if (!InsertChild(T, T.r, 1, c)) return ERROR;
-	w = gettoken(fp);
 	if (w != IDENT) return ERROR;
 	strcpy(tokenText0, token_text);
 	w = gettoken(fp);
