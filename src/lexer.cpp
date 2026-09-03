@@ -442,17 +442,22 @@ station2://临时判断是否是*/的情况
 		if (c == '\\') {   //判断‘\x’的情况
 			token_text[i++] = c;
 			c = fgetc(fp);
-			if (c >= '0' && c <= '9') {  //判断'\数字'的情况
+			if (c >= '0' && c <= '7') {  //八进制转义最多包含三个0～7数字
+				int octal_digits = 0;
 				do {
 					token_text[i++] = c;
 					c = fgetc(fp);
-				} while (c >= '0' && c <= '9');
+					octal_digits++;
+				} while (c >= '0' && c <= '7' && octal_digits < 3);
 				if (c == '\'') {  
 					token_text[i++] = c;
 					token_text[i] = '\0';
 					return CHAR_CONST;
 				}
 				else goto stationERROR;
+			}
+			else if (c == '8' || c == '9') {
+				goto stationERROR;
 			}
 			else if (c == '\'') {  //判断'\''的情况
 				token_text[i++] = c;
