@@ -192,6 +192,8 @@ Choosefile:
 				case ERROR_TOKEN:
 					error_line[error_line_num] = line_num;
 					error_line_num++;
+					printf("\t%s\t\t\t\t%s\n",
+						token_error[0] ? token_error : "词法错误", token_text);
 					break;
 				}
 			}

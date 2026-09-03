@@ -1,6 +1,7 @@
 #include"lexer.h"
 int line_num = 1;
 char token_text[100];
+char token_error[100];
 keyword n[IDENT] = {
 	{"auto",AUTO},{"break",BREAK},{"case",CASE},{"char",CHAR},{"const",CONST},{"continue",CONTINUE},{"default",DEFAULT},{"do",DO},
 	{"double",DOUBLE},{"else",ELSE},{"enum",ENUM},{"extern",EXTERN},{"float",FLOAT},{"for",FOR},{"goto",GOTO},{"if",IF},
@@ -13,6 +14,8 @@ int gettoken(FILE* fp) {
 	char c; //用于暂存读取的单个字符
 	int i=0; //用于做token_text的存储
 	int j=0; //用于与关键字做比对
+	token_text[0] = '\0';
+	token_error[0] = '\0';
 	
 	while (( c = fgetc(fp)) == ' ' || c == '\n'|| c == '\t'|| c == '\r' ||c==EOF)  //跳过空白符和制表符
 	{
@@ -25,7 +28,7 @@ int gettoken(FILE* fp) {
 		do {
 			token_text[i++] = c;
 			c = fgetc(fp);
-		} while ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || (c >= '0' && c <= '9')||c=='.');
+		} while ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || (c >= '0' && c <= '9'));
 		token_text[i] = '\0';
 		ungetc(c, fp);
 
@@ -40,7 +43,7 @@ int gettoken(FILE* fp) {
 		do {
 			token_text[i++] = c;
 			c = fgetc(fp);
-		} while ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || (c >= '0' && c <= '9')||c=='.');
+		} while ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || (c >= '0' && c <= '9'));
 		token_text[i] = '\0';
 		ungetc(c, fp);
 		return IDENT;
@@ -233,6 +236,7 @@ stationERROR:
 			}
 		}
 		else {
+			strcpy(token_error, "不支持的符号");
 			goto stationERROR;
 		}
 	}

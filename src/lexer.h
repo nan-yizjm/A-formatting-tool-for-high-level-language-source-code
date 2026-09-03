@@ -27,5 +27,6 @@ typedef struct keyword { //处理关键字所构建的结构
 
 extern keyword n[IDENT]; //储存各类关键字
 extern char token_text[100]; //暂存常量
+extern char token_error[100]; //暂存词法错误说明
 extern int line_num; //检测运行行数
 int gettoken(FILE* fp);
