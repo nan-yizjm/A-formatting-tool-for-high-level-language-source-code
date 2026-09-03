@@ -418,7 +418,11 @@ status Statement(FILE* fp, CTree& T)  //语法单位<语句>子程序
 	CTree c; CTree p; CTree q; CTree k; 
 	print elem;
 	
-	if (w == IF) {//分析条件语句,p用于生成表达式树,q用于生成if模块子句数，k用于生成else模块子句数
+	if (is_type_token(w)) {
+		if (!LocVarDef(fp, T)) return ERROR;
+		return OK;
+	}
+	else if (w == IF) {//分析条件语句,p用于生成表达式树,q用于生成if模块子句数，k用于生成else模块子句数
 		w = gettoken(fp);
 		if (w != LS) return ERROR;
 		w = gettoken(fp);
