@@ -82,6 +82,11 @@ static int is_assignment_operator(const char* op)
 		!strcmp(op, "*=") || !strcmp(op, "/=") || !strcmp(op, "%=");
 }
 
+static int is_integer_semantic_type(SemanticType type)
+{
+	return type == SEM_CHAR || type == SEM_INT;
+}
+
 static int is_type_token(int token)
 {
 	return token == CONST || token == VOID || token == CHAR || token == SHORT || token == INT ||
@@ -899,11 +904,24 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 						strcpy(parser_error, "运算符两侧类型不兼容");
 						error = 1;
 					}
+					else if (!strcmp(node->nodes[0].data, "%=") &&
+						((left_semantic.type != SEM_UNKNOWN && !is_integer_semantic_type(left_semantic.type)) ||
+						(right_semantic.type != SEM_UNKNOWN && !is_integer_semantic_type(right_semantic.type)))) {
+						strcpy(parser_error, "%运算符要求整数操作数");
+						error = 1;
+					}
 					semantic_stack.push({ left_semantic.type, 0, 0, 0 });
 				}
 				else if (left_semantic.is_array || right_semantic.is_array ||
 					left_semantic.type == SEM_VOID || right_semantic.type == SEM_VOID) {
 					strcpy(parser_error, "运算符两侧类型不兼容");
+					error = 1;
+					semantic_stack.push({ SEM_UNKNOWN, 0, 0, 0 });
+				}
+				else if (!strcmp(node->nodes[0].data, "%") &&
+					((left_semantic.type != SEM_UNKNOWN && !is_integer_semantic_type(left_semantic.type)) ||
+					(right_semantic.type != SEM_UNKNOWN && !is_integer_semantic_type(right_semantic.type)))) {
+					strcpy(parser_error, "%运算符要求整数操作数");
 					error = 1;
 					semantic_stack.push({ SEM_UNKNOWN, 0, 0, 0 });
 				}
