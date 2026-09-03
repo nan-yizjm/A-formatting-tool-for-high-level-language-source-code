@@ -1,5 +1,6 @@
 #include"parser.h"
 #include<string>
+#include<vector>
 
 int w;  //获得gettoken函数的返回值即读入的单词种类编码
 char kind[100]; //储存类型关键字
@@ -8,6 +9,42 @@ char parser_error[100]; //储存语法错误说明
 int indent0 = 0;  //初始化缩进值
 queue<print> printList; //用于方便打印缩进
 static int last_expression_end = -1;
+
+enum SemanticType { SEM_UNKNOWN, SEM_CHAR, SEM_INT, SEM_FLOAT, SEM_DOUBLE, SEM_VOID };
+struct VariableSemanticInfo {
+	std::string name;
+	SemanticType type;
+	int is_array;
+};
+static std::vector<VariableSemanticInfo> semantic_variables;
+static SemanticType last_expression_type = SEM_UNKNOWN;
+static SemanticType current_function_return_type = SEM_UNKNOWN;
+
+static SemanticType semantic_type_from_spelling(const char* spelling)
+{
+	std::string type = spelling;
+	if (type.find("void") != std::string::npos) return SEM_VOID;
+	if (type.find("char") != std::string::npos) return SEM_CHAR;
+	if (type.find("float") != std::string::npos) return SEM_FLOAT;
+	if (type.find("double") != std::string::npos) return SEM_DOUBLE;
+	return SEM_INT;
+}
+
+static SemanticType find_variable_type(const char* name)
+{
+	for (auto it = semantic_variables.rbegin(); it != semantic_variables.rend(); ++it)
+		if (it->name == name) return it->type;
+	return SEM_UNKNOWN;
+}
+
+static SemanticType common_arithmetic_type(SemanticType left, SemanticType right)
+{
+	if (left == SEM_UNKNOWN || right == SEM_UNKNOWN) return SEM_UNKNOWN;
+	if (left == SEM_DOUBLE || right == SEM_DOUBLE) return SEM_DOUBLE;
+	if (left == SEM_FLOAT || right == SEM_FLOAT) return SEM_FLOAT;
+	if (left == SEM_INT || right == SEM_INT) return SEM_INT;
+	return SEM_CHAR;
+}
 
 static int is_type_token(int token)
 {
@@ -66,6 +103,8 @@ status program(FILE* fp, CTree& T)  //语法单位<程序>的子程序
 {
 	CTree c;
 	parser_error[0] = '\0';
+	semantic_variables.clear();
+	current_function_return_type = SEM_UNKNOWN;
 	indent0 = 0;                       //重置缩进值，防止多次运行之间状态泄漏
 	while (!printList.empty()) printList.pop();  //清空打印队列
 	struct print elem = { indent0,line_num };
@@ -135,6 +174,9 @@ status ExtVarDef(FILE* fp, CTree& T)  //语法单位<外部变量定义>子程�
 status VarList(FILE* fp, CTree& T)  //语法单位<变量序列>子程序
 {
 	CTree c; CTree t; //c树用来构建此变量结点，t树用来构建可能存在的下一变量结点
+	std::string declared_name = tokenText0;
+	SemanticType declared_type = semantic_type_from_spelling(kind);
+	int declared_as_array = 0;
 	T.n = 1; T.r = 0;//生成变量序列结点
 	T.nodes[0].data = (char*)malloc((strlen("变量序列") + 1) * sizeof(char));
 	strcpy(T.nodes[0].data, "变量序列");
@@ -142,6 +184,7 @@ status VarList(FILE* fp, CTree& T)  //语法单位<变量序列>子程序
 	T.nodes[0].firstchild = NULL;
 	if (w == LM)     //区分是数组变量还是变量
 	{
+		declared_as_array = 1;
 		do {
 			strcat(tokenText0, "[");
 			w = gettoken(fp);
@@ -180,6 +223,7 @@ status VarList(FILE* fp, CTree& T)  //语法单位<变量序列>子程序
 		w = last_expression_end;
 	}
 	if (!InsertChild(T, T.r, 1, c))	return ERROR;//识别的变量结点作为T的第一个孩子
+	semantic_variables.push_back({ declared_name, declared_type, declared_as_array });
 	if (w != COMMA && w != SEMI) {
 		strcpy(parser_error, "变量声明缺少分号或逗号");
 		return ERROR;
@@ -202,6 +246,7 @@ status funcDef(FILE* fp, CTree& T)  //语法单位<函数定义>子程序
 {
 	CTree c; CTree p; //c结点为函数返回值类型，p结点为函数名结点
 	CTree q; CTree f; CTree s; //q结点为参数序列结点,f为函数体结点，s为可能的复合语句结点
+	SemanticType function_return_type = semantic_type_from_spelling(kind);
 	T.n = 1; T.r = 0;		//生成函数定义结点T
 	T.nodes[0].data = (char*)malloc((strlen("函数定义：") + 1) * sizeof(char));
 	strcpy(T.nodes[0].data, "函数定义：");
@@ -250,7 +295,10 @@ status funcDef(FILE* fp, CTree& T)  //语法单位<函数定义>子程序
 	strcpy(f.nodes[0].data, "函数体：");
 	f.nodes[0].indent = 1;
 	f.nodes[0].firstchild = NULL;
+	SemanticType previous_return_type = current_function_return_type;
+	current_function_return_type = function_return_type;
 	if (!CompStat(fp, s)) return ERROR;
+	current_function_return_type = previous_return_type;
 	if (!InsertChild(f, f.r, 1, s)) return ERROR;
 	if(!InsertChild(T, T.r, 3, f))return ERROR;
 	return OK;
@@ -623,6 +671,11 @@ status Statement(FILE* fp, CTree& T)  //语法单位<语句>子程序
 		w = gettoken(fp);
 		if (w == SEMI) return ERROR;
 		if (!exp(fp, c, SEMI)) return ERROR;
+		if (last_expression_type != SEM_UNKNOWN && current_function_return_type != SEM_UNKNOWN &&
+			last_expression_type != current_function_return_type) {
+			strcpy(parser_error, "return表达式类型与函数返回类型不一致");
+			return ERROR;
+		}
 		w = gettoken(fp);
 		InsertChild(T, T.r, 1, c);
 		return OK;
@@ -653,6 +706,7 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 	//已经读入了第一个单词在w中
 	SqStack op;		//运算符栈
 	SqStack opn;	//操作数栈
+	std::stack<SemanticType> type_stack;
 	CTree* node = (CTree*)malloc(sizeof(CTree));
 	CTree* child1 = (CTree*)malloc(sizeof(CTree));
 	CTree* child2 = (CTree*)malloc(sizeof(CTree));
@@ -663,6 +717,7 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 	T.nodes[0].firstchild = NULL;
 	int error = 0;
 	last_expression_end = -1;
+	last_expression_type = SEM_UNKNOWN;
 	node->n = 1; node->r = 0; //设立起止符号
 	node->nodes[0].data = (char*)malloc((strlen("#") + 1) * sizeof(char));
 	strcpy(node->nodes[0].data, "#");
@@ -674,6 +729,11 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 			|| w == UNSIGNED_LONG_CONST || w == DOUBLE_CONST || w == FLOAT_CONST
 			|| w == LONG_DOUBLE_CONST || w == CHAR_CONST)
 		{
+			SemanticType operand_type = SEM_UNKNOWN;
+			if (w == IDENT) operand_type = find_variable_type(token_text);
+			else if (w == FLOAT_CONST) operand_type = SEM_FLOAT;
+			else if (w == DOUBLE_CONST || w == LONG_DOUBLE_CONST) operand_type = SEM_DOUBLE;
+			else operand_type = SEM_INT;
 			node = (CTree*)malloc(sizeof(CTree));
 			node->n = 1; node->r = 0;
 			node->nodes[0].data = (char*)malloc((strlen(token_text) + strlen("ID: ") + 1) * sizeof(char));
@@ -682,6 +742,7 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 			node->nodes[0].indent = 1;
 			node->nodes[0].firstchild = NULL;
 			Push(opn, node);			//根据w生成一个结点，结点指针进栈opn
+			type_stack.push(operand_type);
 			w = gettoken(fp);
 		}
 		else if (w == PLUS || w == MINUS || w == MULTIPLY || w == DIVIDE ||
@@ -707,7 +768,10 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 				if (!Pop(op, node)) error++;
 				w = gettoken(fp);
 				break;   //去括号
-			case '>':
+			case '>': {
+				SemanticType right_type = SEM_UNKNOWN, left_type = SEM_UNKNOWN;
+				if (!type_stack.empty()) { right_type = type_stack.top(); type_stack.pop(); }
+				if (!type_stack.empty()) { left_type = type_stack.top(); type_stack.pop(); }
 				if (!Pop(opn, child2)) error++;
 				if (!Pop(opn, child1)) error++;
 				if (!Pop(op, node)) error++;
@@ -716,7 +780,17 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 				InsertChild(*node, node->r, 1, *child1);
 				InsertChild(*node, node->r, 2, *child2);
 				Push(opn, node);
+				if (!strcmp(node->nodes[0].data, "=") ||
+					(node->nodes[0].data[1] == '=' && strchr("+-*/%", node->nodes[0].data[0])))
+					type_stack.push(left_type);
+				else if (!strcmp(node->nodes[0].data, "==") || !strcmp(node->nodes[0].data, "!=") ||
+					!strcmp(node->nodes[0].data, ">") || !strcmp(node->nodes[0].data, "<") ||
+					!strcmp(node->nodes[0].data, ">=") || !strcmp(node->nodes[0].data, "<=") ||
+					!strcmp(node->nodes[0].data, "&&") || !strcmp(node->nodes[0].data, "||"))
+					type_stack.push(SEM_INT);
+				else type_stack.push(common_arithmetic_type(left_type, right_type));
 				break;
+			}
 			default:
 				if (w == endsym || w == alt_endsym) {
 					last_expression_end = w;
@@ -739,6 +813,7 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 	if (error) return ERROR;
 	GetTop(opn, node);
 	InsertChild(T, T.r, 1, *node);
+	if (!type_stack.empty()) last_expression_type = type_stack.top();
 	return OK;
 }
 
