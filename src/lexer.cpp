@@ -464,7 +464,7 @@ station2://临时判断是否是*/的情况
 				}
 				else goto stationERROR;
 			}
-			else {  //判断'\其他'的情况
+			else if (strchr("\"?\\abfnrtv", c) != NULL) {  //标准简单转义字符
 				token_text[i++] = c;
 				c = fgetc(fp);
 				if (c == '\'') {
@@ -482,6 +482,9 @@ station2://临时判断是否是*/的情况
 					}
 					else goto stationERROR; 
 				}
+			}
+			else {
+				goto stationERROR;
 			}
 		}
 		else if (c == '\'') {  //判断'''的情况
