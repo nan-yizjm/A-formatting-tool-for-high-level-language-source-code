@@ -11,7 +11,7 @@ keyword n[IDENT] = {
 };
 
 int gettoken(FILE* fp) {
-	char c; //用于暂存读取的单个字符
+	int c; //必须使用int，才能可靠地区分所有字符和EOF
 	int i=0; //用于做token_text的存储
 	int j=0; //用于与关键字做比对
 	token_text[0] = '\0';
@@ -610,7 +610,10 @@ station2://临时判断是否是*/的情况
 
 	default:
 		if (c == EOF) return EOF;
-		else return ERROR_TOKEN;
+		token_text[0] = (char)c;
+		token_text[1] = '\0';
+		strcpy(token_error, "不支持的符号");
+		return ERROR_TOKEN;
 
 	}//switch结束
 

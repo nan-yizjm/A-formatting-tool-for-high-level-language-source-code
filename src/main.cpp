@@ -22,8 +22,8 @@ int main() {
     SetConsoleOutputCP(65001);
 #endif
 	MAKE_DIR("../output");
-	char filename[30];
-	char filepath[60];
+	char filename[256];
+	char filepath[512];
 	int ch = 1;
 	int w;
 	CTree T;
@@ -38,8 +38,8 @@ int main() {
 Choosefile:
 	CLEAR_SCREEN();
 	printf("输入文件名：");
-	if (scanf("%s", filename) != 1) { getchar(); getchar(); goto Choosefile; }
-	sprintf(filepath, "../input/%s", filename);
+	if (scanf("%255s", filename) != 1) { getchar(); getchar(); goto Choosefile; }
+	snprintf(filepath, sizeof(filepath), "../input/%s", filename);
 	if (!(fp = fopen(filepath, "r")))
 	{
 		printf("...选择文件错误，请重新选择...\n");
@@ -57,7 +57,7 @@ Choosefile:
 		switch (ch)
 		{
 		case 1:
-			error_line_num = 1;
+			error_line_num = 0;
 			line_num = 1;  //行数初始化为1
 			if (!(fp = fopen(filepath, "r"))) 
 			{ printf("...选择文件错误，请重新选择...\n"); 
@@ -65,7 +65,7 @@ Choosefile:
 			break; 
 			}
 			printf("...正在预编译文件...\n");
-			if (pre_process(fp, filename))
+			if (pre_process(fp, filepath))
 			{
 				printf("预编译成功！按任意键继续...\n");
 				getchar(); getchar();
@@ -81,9 +81,8 @@ Choosefile:
 			CLEAR_SCREEN();
 			printf("\n");
 			printf("	单词类别				单词值\n");
-			while (!feof(mid_fp))
+			while ((w = gettoken(mid_fp)) != EOF)
 			{
-				w = gettoken(mid_fp);
 				if (w >= AUTO && w <= DEFINE)
 				{
 					printf("	关键字					%s\n", token_text);
@@ -197,8 +196,8 @@ Choosefile:
 					printf("	逗号					,\n");
 					break;
 				case ERROR_TOKEN:
-					error_line[error_line_num] = line_num;
-					error_line_num++;
+					if (error_line_num < 100)
+						error_line[error_line_num++] = line_num;
 					printf("\t%s\t\t\t\t%s\n",
 						token_error[0] ? token_error : "词法错误", token_text);
 					break;
@@ -223,7 +222,7 @@ Choosefile:
 			printf("...正在预编译文件...\n");
 			line_num = 1;  //行数初始化为1
 			fp = fopen(filepath, "r");
-			if (pre_process(fp, filename))
+			if (pre_process(fp, filepath))
 			{
 				printf("预编译成功！按任意键继续...\n");
 				getchar(); getchar();
@@ -254,7 +253,7 @@ Choosefile:
 		case 3:
 			line_num = 1;  //行数初始化为1
 			fp = fopen(filepath, "r");
-			if (!pre_process(fp, filename))
+			if (!pre_process(fp, filepath))
 			{
 				printf("预编译失败！退出系统！请检查错误！\n");
 				getchar(); getchar();
