@@ -15,11 +15,13 @@ struct ExpressionSemantic {
 	SemanticType type;
 	int modifiable;
 	int is_array;
+	int is_const;
 };
 struct VariableSemanticInfo {
 	std::string name;
 	SemanticType type;
 	int is_array;
+	int is_const;
 };
 struct FunctionSemanticInfo {
 	std::string name;
@@ -32,6 +34,7 @@ static std::vector<FunctionSemanticInfo> semantic_functions;
 static std::vector<SemanticType> current_parameter_types;
 static SemanticType last_expression_type = SEM_UNKNOWN;
 static SemanticType current_function_return_type = SEM_UNKNOWN;
+static int current_type_is_const = 0;
 
 static SemanticType semantic_type_from_spelling(const char* spelling)
 {
@@ -81,7 +84,7 @@ static int is_assignment_operator(const char* op)
 
 static int is_type_token(int token)
 {
-	return token == VOID || token == CHAR || token == SHORT || token == INT ||
+	return token == CONST || token == VOID || token == CHAR || token == SHORT || token == INT ||
 		token == LONG || token == SIGNED || token == UNSIGNED ||
 		token == FLOAT || token == DOUBLE;
 }
@@ -90,13 +93,14 @@ static status parse_type_specifier(FILE* fp, int allow_void)
 {
 	int void_count = 0, char_count = 0, short_count = 0, int_count = 0;
 	int long_count = 0, signed_count = 0, unsigned_count = 0;
-	int float_count = 0, double_count = 0, total = 0;
+	int float_count = 0, double_count = 0, const_count = 0, total = 0;
 	std::string spelling;
 	while (is_type_token(w)) {
 		if (!spelling.empty()) spelling += " ";
 		spelling += token_text;
 		total++;
 		switch (w) {
+		case CONST: const_count++; break;
 		case VOID: void_count++; break;
 		case CHAR: char_count++; break;
 		case SHORT: short_count++; break;
@@ -110,25 +114,27 @@ static status parse_type_specifier(FILE* fp, int allow_void)
 		w = gettoken(fp);
 	}
 
-	int valid = total > 0 && signed_count <= 1 && unsigned_count <= 1 &&
+	int type_total = total - const_count;
+	int valid = type_total > 0 && const_count <= 1 && signed_count <= 1 && unsigned_count <= 1 &&
 		!(signed_count && unsigned_count);
-	if (void_count) valid = valid && allow_void && total == 1;
-	else if (float_count) valid = valid && float_count == 1 && total == 1;
+	if (void_count) valid = valid && allow_void && type_total == 1;
+	else if (float_count) valid = valid && float_count == 1 && type_total == 1;
 	else if (double_count)
 		valid = valid && double_count == 1 && long_count <= 1 &&
-			total == double_count + long_count;
+			type_total == double_count + long_count;
 	else if (char_count)
-		valid = valid && char_count == 1 && total == char_count + signed_count + unsigned_count;
+		valid = valid && char_count == 1 && type_total == char_count + signed_count + unsigned_count;
 	else
 		valid = valid && int_count <= 1 && short_count <= 1 && long_count <= 1 &&
 			!(short_count && long_count) &&
-			total == int_count + short_count + long_count + signed_count + unsigned_count;
+			type_total == int_count + short_count + long_count + signed_count + unsigned_count;
 
 	if (!valid) {
 		strcpy(parser_error, "非法的类型说明符组合");
 		return ERROR;
 	}
 	strcpy(kind, spelling.c_str());
+	current_type_is_const = const_count != 0;
 	return OK;
 }
 
@@ -211,6 +217,7 @@ status VarList(FILE* fp, CTree& T)  //语法单位<变量序列>子程序
 	std::string declared_name = tokenText0;
 	SemanticType declared_type = semantic_type_from_spelling(kind);
 	int declared_as_array = 0;
+	int declared_as_const = current_type_is_const;
 	T.n = 1; T.r = 0;//生成变量序列结点
 	T.nodes[0].data = (char*)malloc((strlen("变量序列") + 1) * sizeof(char));
 	strcpy(T.nodes[0].data, "变量序列");
@@ -257,7 +264,7 @@ status VarList(FILE* fp, CTree& T)  //语法单位<变量序列>子程序
 		w = last_expression_end;
 	}
 	if (!InsertChild(T, T.r, 1, c))	return ERROR;//识别的变量结点作为T的第一个孩子
-	semantic_variables.push_back({ declared_name, declared_type, declared_as_array });
+	semantic_variables.push_back({ declared_name, declared_type, declared_as_array, declared_as_const });
 	if (w != COMMA && w != SEMI) {
 		strcpy(parser_error, "变量声明缺少分号或逗号");
 		return ERROR;
@@ -393,7 +400,7 @@ status FormParDef(FILE* fp, CTree& T)  //语法单位<形参>子程序
 	InsertChild(T, T.r, 2, p);
 	SemanticType parameter_type = semantic_type_from_spelling(kind);
 	current_parameter_types.push_back(parameter_type);
-	semantic_variables.push_back({ parameter_name, parameter_type, 0 });
+	semantic_variables.push_back({ parameter_name, parameter_type, 0, current_type_is_const });
 	return OK;
 }
 
@@ -772,14 +779,15 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 			|| w == LONG_DOUBLE_CONST || w == CHAR_CONST)
 		{
 			SemanticType operand_type = SEM_UNKNOWN;
-			ExpressionSemantic operand_semantic = { SEM_UNKNOWN, 0, 0 };
+			ExpressionSemantic operand_semantic = { SEM_UNKNOWN, 0, 0, 0 };
 			int operand_was_identifier = w == IDENT;
 			std::string operand_name = token_text;
 			if (operand_was_identifier) {
 				const VariableSemanticInfo* variable = find_variable_info(token_text);
 				operand_type = variable ? variable->type : SEM_UNKNOWN;
-				operand_semantic.modifiable = 1;
+				operand_semantic.modifiable = variable ? !variable->is_const : 1;
 				operand_semantic.is_array = variable ? variable->is_array : 0;
+				operand_semantic.is_const = variable ? variable->is_const : 0;
 			}
 			else if (w == FLOAT_CONST) operand_type = SEM_FLOAT;
 			else if (w == DOUBLE_CONST || w == LONG_DOUBLE_CONST) operand_type = SEM_DOUBLE;
@@ -816,7 +824,7 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 					node = call_node;
 					const FunctionSemanticInfo* function = find_function_info(operand_name.c_str());
 					operand_type = function ? function->return_type : SEM_UNKNOWN;
-					operand_semantic = { operand_type, 0, 0 };
+					operand_semantic = { operand_type, 0, 0, 0 };
 				}
 				else {
 					CTree index_expression;
@@ -833,7 +841,8 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 					node = access_node;
 					const VariableSemanticInfo* variable = find_variable_info(operand_name.c_str());
 					operand_type = variable ? variable->type : SEM_UNKNOWN;
-					operand_semantic = { operand_type, 1, 0 };
+					operand_semantic = { operand_type, variable ? !variable->is_const : 1,
+						0, variable ? variable->is_const : 0 };
 					w = gettoken(fp);
 				}
 			}
@@ -864,8 +873,8 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 				w = gettoken(fp);
 				break;   //去括号
 			case '>': {
-				ExpressionSemantic right_semantic = { SEM_UNKNOWN, 0, 0 };
-				ExpressionSemantic left_semantic = { SEM_UNKNOWN, 0, 0 };
+				ExpressionSemantic right_semantic = { SEM_UNKNOWN, 0, 0, 0 };
+				ExpressionSemantic left_semantic = { SEM_UNKNOWN, 0, 0, 0 };
 				if (!semantic_stack.empty()) { right_semantic = semantic_stack.top(); semantic_stack.pop(); }
 				if (!semantic_stack.empty()) { left_semantic = semantic_stack.top(); semantic_stack.pop(); }
 				if (!Pop(opn, child2)) error++;
@@ -878,18 +887,19 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 				Push(opn, node);
 				if (is_assignment_operator(node->nodes[0].data)) {
 					if (!left_semantic.modifiable) {
-						strcpy(parser_error, "赋值左侧必须是可修改对象");
+						strcpy(parser_error, left_semantic.is_const ?
+							"const对象不能赋值" : "赋值左侧必须是可修改对象");
 						error = 1;
 					}
-					semantic_stack.push({ left_semantic.type, 0, 0 });
+					semantic_stack.push({ left_semantic.type, 0, 0, 0 });
 				}
 				else if (!strcmp(node->nodes[0].data, "==") || !strcmp(node->nodes[0].data, "!=") ||
 					!strcmp(node->nodes[0].data, ">") || !strcmp(node->nodes[0].data, "<") ||
 					!strcmp(node->nodes[0].data, ">=") || !strcmp(node->nodes[0].data, "<=") ||
 					!strcmp(node->nodes[0].data, "&&") || !strcmp(node->nodes[0].data, "||"))
-					semantic_stack.push({ SEM_INT, 0, 0 });
+					semantic_stack.push({ SEM_INT, 0, 0, 0 });
 				else semantic_stack.push({
-					common_arithmetic_type(left_semantic.type, right_semantic.type), 0, 0 });
+					common_arithmetic_type(left_semantic.type, right_semantic.type), 0, 0, 0 });
 				break;
 			}
 			default:
