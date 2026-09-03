@@ -1,6 +1,7 @@
 #include"parser.h"
 #include<string>
 #include<vector>
+#include<algorithm>
 
 int w;  //获得gettoken函数的返回值即读入的单词种类编码
 char kind[100]; //储存类型关键字
@@ -22,6 +23,7 @@ struct VariableSemanticInfo {
 	SemanticType type;
 	int is_array;
 	int is_const;
+	int scope_depth;
 };
 struct FunctionSemanticInfo {
 	std::string name;
@@ -35,6 +37,8 @@ static std::vector<SemanticType> current_parameter_types;
 static SemanticType last_expression_type = SEM_UNKNOWN;
 static SemanticType current_function_return_type = SEM_UNKNOWN;
 static int current_type_is_const = 0;
+static int semantic_scope_depth = 0;
+static int function_body_reuses_scope = 0;
 
 static SemanticType semantic_type_from_spelling(const char* spelling)
 {
@@ -65,6 +69,17 @@ static const FunctionSemanticInfo* find_function_info(const char* name)
 	for (auto it = semantic_functions.rbegin(); it != semantic_functions.rend(); ++it)
 		if (it->name == name) return &*it;
 	return NULL;
+}
+
+static void leave_semantic_scope()
+{
+	semantic_variables.erase(
+		std::remove_if(semantic_variables.begin(), semantic_variables.end(),
+			[](const VariableSemanticInfo& variable) {
+				return variable.scope_depth == semantic_scope_depth;
+			}),
+		semantic_variables.end());
+	semantic_scope_depth--;
 }
 
 static SemanticType common_arithmetic_type(SemanticType left, SemanticType right)
@@ -150,6 +165,8 @@ status program(FILE* fp, CTree& T)  //语法单位<程序>的子程序
 	semantic_variables.clear();
 	semantic_functions.clear();
 	current_function_return_type = SEM_UNKNOWN;
+	semantic_scope_depth = 0;
+	function_body_reuses_scope = 0;
 	indent0 = 0;                       //重置缩进值，防止多次运行之间状态泄漏
 	while (!printList.empty()) printList.pop();  //清空打印队列
 	struct print elem = { indent0,line_num };
@@ -257,7 +274,14 @@ status VarList(FILE* fp, CTree& T)  //语法单位<变量序列>子程序
 		c.nodes[0].indent = 1;
 		c.nodes[0].firstchild = NULL;
 	}
-	semantic_variables.push_back({ declared_name, declared_type, declared_as_array, declared_as_const });
+	for (const auto& variable : semantic_variables) {
+		if (variable.scope_depth == semantic_scope_depth && variable.name == declared_name) {
+			strcpy(parser_error, "同一作用域重复定义变量");
+			return ERROR;
+		}
+	}
+	semantic_variables.push_back({ declared_name, declared_type, declared_as_array,
+		declared_as_const, semantic_scope_depth });
 	if (w == EQUAL_TO) {
 		CTree initializer;
 		w = gettoken(fp);
@@ -295,6 +319,7 @@ status funcDef(FILE* fp, CTree& T)  //语法单位<函数定义>子程序
 	SemanticType function_return_type = semantic_type_from_spelling(kind);
 	std::string function_name = tokenText0;
 	current_parameter_types.clear();
+	semantic_scope_depth++;
 	T.n = 1; T.r = 0;		//生成函数定义结点T
 	T.nodes[0].data = (char*)malloc((strlen("函数定义：") + 1) * sizeof(char));
 	strcpy(T.nodes[0].data, "函数定义：");
@@ -337,6 +362,7 @@ status funcDef(FILE* fp, CTree& T)  //语法单位<函数定义>子程序
 		current_parameter_types, w == LL });
 	if (w == SEMI) {
 		strcpy(T.nodes[0].data, "函数声明：");
+		leave_semantic_scope();
 		w = gettoken(fp);
 		return OK;
 	}
@@ -347,6 +373,7 @@ status funcDef(FILE* fp, CTree& T)  //语法单位<函数定义>子程序
 	f.nodes[0].firstchild = NULL;
 	SemanticType previous_return_type = current_function_return_type;
 	current_function_return_type = function_return_type;
+	function_body_reuses_scope = 1;
 	if (!CompStat(fp, s)) return ERROR;
 	current_function_return_type = previous_return_type;
 	if (!InsertChild(f, f.r, 1, s)) return ERROR;
@@ -405,7 +432,8 @@ status FormParDef(FILE* fp, CTree& T)  //语法单位<形参>子程序
 	InsertChild(T, T.r, 2, p);
 	SemanticType parameter_type = semantic_type_from_spelling(kind);
 	current_parameter_types.push_back(parameter_type);
-	semantic_variables.push_back({ parameter_name, parameter_type, 0, current_type_is_const });
+	semantic_variables.push_back({ parameter_name, parameter_type, 0,
+		current_type_is_const, semantic_scope_depth });
 	return OK;
 }
 
@@ -414,6 +442,8 @@ status CompStat(FILE* fp, CTree& T)  //语法单位<复合语句>子程序
 	CTree c; CTree p; //c用于生成局部变量定义子树，p用于生成语句序列子树
 	status flag;
 	print elem;
+	if (function_body_reuses_scope) function_body_reuses_scope = 0;
+	else semantic_scope_depth++;
 	T.n = 1; T.r = 0;		//生成复合语句结点
 	T.nodes[0].data = (char*)malloc((strlen("复合语句：") + 1) * sizeof(char));
 	strcpy(T.nodes[0].data, "复合语句：");
@@ -443,6 +473,7 @@ status CompStat(FILE* fp, CTree& T)  //语法单位<复合语句>子程序
 	printList.push(elem);
 	if (w != RL) return ERROR;
 	w = gettoken(fp);
+	leave_semantic_scope();
 	return OK;
 }
 
