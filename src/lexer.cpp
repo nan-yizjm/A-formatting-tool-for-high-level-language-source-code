@@ -469,6 +469,25 @@ station2://临时判断是否是*/的情况
 				}
 				else goto stationERROR;
 			}
+			else if (c == 'x' || c == 'X') {  //十六进制转义至少包含一个十六进制数字
+				token_text[i++] = c;
+				c = fgetc(fp);
+				if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+					(c >= 'A' && c <= 'F'))) {
+					goto stationERROR;
+				}
+				do {
+					token_text[i++] = c;
+					c = fgetc(fp);
+				} while ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+					(c >= 'A' && c <= 'F'));
+				if (c == '\'') {
+					token_text[i++] = c;
+					token_text[i] = '\0';
+					return CHAR_CONST;
+				}
+				goto stationERROR;
+			}
 			else if (strchr("\"?\\abfnrtv", c) != NULL) {  //标准简单转义字符
 				token_text[i++] = c;
 				c = fgetc(fp);
