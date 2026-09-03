@@ -889,7 +889,11 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 					w = gettoken(fp);
 					node = call_node;
 					const FunctionSemanticInfo* function = find_function_info(operand_name.c_str());
-					operand_type = function ? function->return_type : SEM_UNKNOWN;
+					if (!function) {
+						strcpy(parser_error, "调用了未声明的函数");
+						return ERROR;
+					}
+					operand_type = function->return_type;
 					operand_semantic = { operand_type, 0, 0, 0 };
 				}
 				else {
