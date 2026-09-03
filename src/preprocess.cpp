@@ -33,6 +33,25 @@ static status expand_include(FILE* output, const char* header_text,
 	fclose(header_fp);
 	return OK;
 }
+
+static int directive_is_at_line_start(FILE* fp)
+{
+	long return_position = ftell(fp);
+	if (return_position < 0) return 0;
+	long position = return_position - 2; //当前位置在#之后，从#前一个字符开始检查
+	while (position >= 0) {
+		if (fseek(fp, position, SEEK_SET) != 0) return 0;
+		int c = fgetc(fp);
+		if (c == '\n') break;
+		if (c != ' ' && c != '\t' && c != '\r') {
+			fseek(fp, return_position, SEEK_SET);
+			return 0;
+		}
+		position--;
+	}
+	fseek(fp, return_position, SEEK_SET);
+	return 1;
+}
 define_data data_Def[10];//用于储存define宏定义的内容，全局
 include_data data_Inculd[10];//用于储存include文件包含的内容，全局
 int data_Def_num;//宏定义个数
@@ -51,6 +70,7 @@ status pre_process(FILE* fp, const char* source_path) {
 	w = gettoken(fp);
 	do {
 		if (w == POUND) {
+			if (!directive_is_at_line_start(fp)) return ERROR;
 			w = gettoken(fp);
 			if (w == DEFINE) {
 				w = gettoken(fp);
