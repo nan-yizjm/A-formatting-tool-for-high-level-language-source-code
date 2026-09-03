@@ -616,7 +616,7 @@ status exp(FILE* fp, CTree& T, int endsym)//语法单位<表达式>子程序
 		}
 		else if (w == PLUS || w == MINUS || w == MULTIPLY || w == DIVIDE ||
 			w == MOD || w == LS || w == RS || ((w>=MORE)&&(w<= LESS_EQUAL)) || w == EQUAL_TO ||
-			w == AND || w == OR || w == POUND)
+			(w >= PLUS_EQUAL && w <= MOD_EQUAL) || w == AND || w == OR || w == POUND)
 		{
 			node = (CTree*)malloc(sizeof(CTree));
 			GetTop(op, node);
@@ -685,15 +685,15 @@ char precede(char* a, char* b)
 	switch (a[0])
 	{
 	case '+':
-		i = 0; break;
+		i = a[1] == '=' ? 7 : 0; break;
 	case '-':
-		i = 1; break;
+		i = a[1] == '=' ? 7 : 1; break;
 	case '*':
-		i = 2; break;
+		i = a[1] == '=' ? 7 : 2; break;
 	case '/':
-		i = 3; break;
+		i = a[1] == '=' ? 7 : 3; break;
 	case '%':
-		i = 4; break;
+		i = a[1] == '=' ? 7 : 4; break;
 	case '(':
 		i = 5; break;
 	case ')':
@@ -726,15 +726,15 @@ char precede(char* a, char* b)
 	switch (b[0])
 	{
 	case '+':
-		j = 0; break;
+		j = b[1] == '=' ? 7 : 0; break;
 	case '-':
-		j = 1; break;
+		j = b[1] == '=' ? 7 : 1; break;
 	case '*':
-		j = 2; break;
+		j = b[1] == '=' ? 7 : 2; break;
 	case '/':
-		j = 3; break;
+		j = b[1] == '=' ? 7 : 3; break;
 	case '%':
-		j = 4; break;
+		j = b[1] == '=' ? 7 : 4; break;
 	case '(':
 		j = 5; break;
 	case ')':

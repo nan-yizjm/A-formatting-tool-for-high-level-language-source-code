@@ -126,6 +126,13 @@ Choosefile:
 				case EQUAL_TO:
 					printf("	赋值运算符				=\n");
 					break;
+				case PLUS_EQUAL:
+				case MINUS_EQUAL:
+				case MULTIPLY_EQUAL:
+				case DIVIDE_EQUAL:
+				case MOD_EQUAL:
+					printf("	复合赋值运算符			%s\n", token_text);
+					break;
 				case PLUS:
 					printf("	加法运算符				+\n");
 					break;

@@ -374,28 +374,61 @@ stationERROR:
 
 	case'+':
 		token_text[i++] = c;
+		c = fgetc(fp);
+		if (c == '=') {
+			token_text[i++] = c;
+			token_text[i] = '\0';
+			return PLUS_EQUAL;
+		}
+		ungetc(c, fp);
 		token_text[i] = '\0';
 		return PLUS;
 
 	case'-':
 		token_text[i++] = c;
+		c = fgetc(fp);
+		if (c == '=') {
+			token_text[i++] = c;
+			token_text[i] = '\0';
+			return MINUS_EQUAL;
+		}
+		ungetc(c, fp);
 		token_text[i] = '\0';
 		return MINUS;
 
 	case'*':
 		token_text[i++] = c;
+		c = fgetc(fp);
+		if (c == '=') {
+			token_text[i++] = c;
+			token_text[i] = '\0';
+			return MULTIPLY_EQUAL;
+		}
+		ungetc(c, fp);
 		token_text[i] = '\0';
 		return MULTIPLY;
 
 	case'%':
 		token_text[i++] = c;
+		c = fgetc(fp);
+		if (c == '=') {
+			token_text[i++] = c;
+			token_text[i] = '\0';
+			return MOD_EQUAL;
+		}
+		ungetc(c, fp);
 		token_text[i] = '\0';
 		return MOD;
 
 	case'/':
 		token_text[i++] = c;
 		c = fgetc(fp);
-		if (c == '/') {   //判断行注释
+		if (c == '=') {
+			token_text[i++] = c;
+			token_text[i] = '\0';
+			return DIVIDE_EQUAL;
+		}
+		else if (c == '/') {   //判断行注释
 			do {
 				token_text[i++] = c;
 				c = fgetc(fp);
