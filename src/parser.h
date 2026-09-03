@@ -20,6 +20,14 @@ extern int w;						//获得gettoken函数的返回值即读入的单词种类编
 extern char kind[100];			    //存取类型关键字
 extern char tokenText0[100];		//存取变量名或函数名
 extern char parser_error[100];		//存取语法错误说明
+#define MAX_PARSE_ERRORS 200
+struct parse_error
+{
+	int line;						//错误所在行号
+	char reason[160];				//错误原因描述
+};
+extern struct parse_error parse_error_list[MAX_PARSE_ERRORS];	//错误列表
+extern int parse_error_count;		//错误总数
 
 status program(FILE* fp, CTree& T); //语法单位<程序>的子程序
 status ExtDefList(FILE* fp, CTree& T);//语法单位<外部定义序列>的子程序

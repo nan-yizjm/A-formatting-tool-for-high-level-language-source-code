@@ -238,10 +238,13 @@ Choosefile:
 			CLEAR_SCREEN();
 			if (!program(mid_fp, T))
 			{
-				printf("发生生成错误！错误行号：%d\n", line_num);
-				if (parser_error[0]) printf("错误原因：%s\n", parser_error);
-				printf("按任意键继续...\n");
-				getchar(); 
+				printf("\n语法分析发现 %d 个错误：\n", parse_error_count);
+				for (i = 0; i < parse_error_count; i++) {
+					printf("  错误 %d（第 %d 行）：%s\n", i + 1,
+						parse_error_list[i].line, parse_error_list[i].reason);
+				}
+				printf("\n按任意键继续...\n");
+				getchar();
 				break;
 			}
 			TraverseTree(T, PrintTree);
@@ -264,6 +267,9 @@ Choosefile:
 			if (!program(mid_fp, T))
 			{
 				printf("程序存在语法错误！无法缩进打印！\n");
+				for (i = 0; i < parse_error_count; i++) {
+					printf("  第 %d 行：%s\n", parse_error_list[i].line, parse_error_list[i].reason);
+				}
 				getchar(); getchar();
 				break;
 			}

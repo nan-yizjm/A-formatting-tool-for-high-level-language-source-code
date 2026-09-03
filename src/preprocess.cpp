@@ -65,6 +65,12 @@ define_data data_Def[10];//用于储存define宏定义的内容，全局
 include_data data_Inculd[10];//用于储存include文件包含的内容，全局
 int data_Def_num;//宏定义个数
 
+//按源文件的行距补齐换行，避免空行丢失导致后续报错行号偏移
+static void write_newlines(FILE* output, int count)
+{
+	for (int k = 0; k < count; k++) fputc('\n', output);
+}
+
 status pre_process(FILE* fp, const char* source_path) {
 	int w; //接受gettoken读取的返回值
 	int i=0,j=0,m;//i是宏定义个数，j是include个数
@@ -141,7 +147,8 @@ status pre_process(FILE* fp, const char* source_path) {
 				for (m = 0; m < data_Def_num; m++) {
 					if (!strcmp(token_text, data_Def[m].ident)) {
 						if (pre_line_num != line_num) {
-							fprintf(mid_fp, "\n%s ", data_Def[m].string);
+							write_newlines(mid_fp, line_num - pre_line_num);
+							fprintf(mid_fp, "%s ", data_Def[m].string);
 							flag = 1;
 						}
 						else { fprintf(mid_fp, "%s ", data_Def[m].string); flag = 1; }
@@ -152,7 +159,8 @@ status pre_process(FILE* fp, const char* source_path) {
 				}
 				else {
 					if (pre_line_num != line_num) {
-						fprintf(mid_fp, "\n%s ", token_text);
+						write_newlines(mid_fp, line_num - pre_line_num);
+						fprintf(mid_fp, "%s ", token_text);
 					}
 					else { fprintf(mid_fp, "%s ", token_text); }
 				}
@@ -164,20 +172,22 @@ status pre_process(FILE* fp, const char* source_path) {
 			}
 			else if (w == BLOCKNOTE) {
 			
-				for(m=0;m<line_num-pre_line_num;m++) fprintf(mid_fp, "\n");
+				write_newlines(mid_fp, line_num - pre_line_num);
 				pre_line_num = line_num;
 				w = gettoken(fp);
 				continue;
 			}
 			else if (w == ERROR_TOKEN) {
 				if (pre_line_num != line_num) {
-					fprintf(mid_fp, "\n%s ", token_text);
+					write_newlines(mid_fp, line_num - pre_line_num);
+						fprintf(mid_fp, "%s ", token_text);
 				}
 				else { fprintf(mid_fp, "%s ", token_text); }
 			}
 			else {
 				if (pre_line_num != line_num) {
-					fprintf(mid_fp, "\n%s ", token_text);
+					write_newlines(mid_fp, line_num - pre_line_num);
+						fprintf(mid_fp, "%s ", token_text);
 				}
 				else { fprintf(mid_fp, "%s ", token_text); }
 			}

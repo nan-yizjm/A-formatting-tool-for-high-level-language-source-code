@@ -41,6 +41,43 @@ static int current_type_is_const = 0;
 static int semantic_scope_depth = 0;
 static int function_body_reuses_scope = 0;
 
+struct parse_error parse_error_list[MAX_PARSE_ERRORS];
+int parse_error_count = 0;
+
+// 记录一个语法错误：保存当前行号和原因，同时把首个错误写入 parser_error 以兼容旧逻辑
+static void record_parse_error(const char* reason)
+{
+	if (parse_error_count == 0) {
+		strncpy(parser_error, reason, 99);
+		parser_error[99] = '\0';
+	}
+	if (parse_error_count < MAX_PARSE_ERRORS) {
+		parse_error_list[parse_error_count].line = line_num;
+		strncpy(parse_error_list[parse_error_count].reason, reason, 159);
+		parse_error_list[parse_error_count].reason[159] = '\0';
+		parse_error_count++;
+	}
+}
+
+// 出错后跳过 token，直到分号、左右大括号或文件结束，便于继续解析后面的语句
+static void synchronize(FILE* fp)
+{
+	while (w != SEMI && w != RL && w != LL && w != EOF) {
+		w = gettoken(fp);
+	}
+}
+
+// 语句头部（if/for/while 的括号）解析出错时，把整个头部剩余部分跳过，
+// 避免残留 token 被当作普通语句再报一堆无关错误
+static void skip_statement_header(FILE* fp)
+{
+	if (w == POUND) return;  //右括号已被表达式消费，头部已结束
+	while (w != RS && w != RL && w != EOF) {
+		w = gettoken(fp);
+	}
+	if (w == RS) w = gettoken(fp);
+}
+
 static SemanticType semantic_type_from_spelling(const char* spelling)
 {
 	std::string type = spelling;
@@ -151,7 +188,7 @@ static status parse_type_specifier(FILE* fp, int allow_void)
 			type_total == int_count + short_count + long_count + signed_count + unsigned_count;
 
 	if (!valid) {
-		strcpy(parser_error, "非法的类型说明符组合");
+		record_parse_error("非法的类型说明符组合");
 		return ERROR;
 	}
 	strcpy(kind, spelling.c_str());
@@ -163,6 +200,7 @@ status program(FILE* fp, CTree& T)  //语法单位<程序>的子程序
 {
 	CTree c;
 	parser_error[0] = '\0';
+	parse_error_count = 0;               //重置错误列表，支持连续多次分析
 	semantic_variables.clear();
 	semantic_functions.clear();
 	current_function_return_type = SEM_UNKNOWN;
@@ -173,31 +211,37 @@ status program(FILE* fp, CTree& T)  //语法单位<程序>的子程序
 	struct print elem = { indent0,line_num };
 	printList.push(elem);//存入程序的缩进值
 	w = gettoken(fp);
-	if (!ExtDefList(fp, c)) return ERROR;  //调用外部定义序列函数
+	ExtDefList(fp, c);  //调用外部定义序列函数，出错不中断，尽量收集所有错误
 	T.n = 1; T.r = 0;
 	T.nodes[0].data = (char*)malloc((strlen("程序") + 1) * sizeof(char)); //定义语法树的根结点nodes[0]
 	strcpy(T.nodes[0].data, "程序");
 	T.nodes[0].indent = 0;
 	T.nodes[0].firstchild = NULL;
 	InsertChild(T, T.r, 1, c); //将c子树插入到语法树中
-	return OK;
+	return parse_error_count == 0 ? OK : ERROR;
 }
 
 status ExtDefList(FILE* fp, CTree& T) //语法单位<外部定义序列>的子程序
 {
-	CTree c; 
-	status flag;//查看是否建立第二棵子树
-	if (w == EOF) return INFEASIBLE;
+	CTree c;
 	T.n = 1;  T.r = 0;
 	T.nodes[0].data = (char*)malloc((strlen("外部定义序列") + 1) * sizeof(char)); //创建外部定义序列树
 	strcpy(T.nodes[0].data, "外部定义序列");
 	T.nodes[0].indent = 0;
 	T.nodes[0].firstchild = NULL;
-	if (!ExtDef(fp, c)) return ERROR;
-	InsertChild(T, T.r, 1, c); //处理一个外部定义，得到一棵子树，作为根的第一棵子树
-	flag = ExtDefList(fp, c);
-	if (flag == OK) InsertChild(T, T.r, 2, c); //得到的子树，作为根的第二棵子树
-	if (flag==ERROR) return ERROR;
+	int child_index = 1;
+	while (w != EOF) {
+		if (ExtDef(fp, c)) {
+			InsertChild(T, T.r, child_index++, c);
+		}
+		else {
+			//出错已记录，跳过当前定义，找下一个类型说明符开头继续
+			synchronize(fp);
+			if (w == SEMI) w = gettoken(fp);
+			if (w == RL) w = gettoken(fp);
+			while (w != EOF && !is_type_token(w)) w = gettoken(fp);
+		}
+	}
 	return OK;
 }
 
@@ -205,7 +249,10 @@ status ExtDef(FILE* fp, CTree& T)  //语法单位<外部定义>的子程序
 {
 	status flag;
 	if (!parse_type_specifier(fp, 1)) return ERROR;
-	if (w != IDENT) return ERROR;
+	if (w != IDENT) {
+		record_parse_error("类型说明符后缺少标识符");
+		return ERROR;
+	}
 	strcpy(tokenText0, token_text);		//保存第一个变量名或函数名到tokenText0
 	w = gettoken(fp);
 	if (w != LS) flag = ExtVarDef(fp, T);	//调用外部变量定义子程序
@@ -252,10 +299,16 @@ status VarList(FILE* fp, CTree& T)  //语法单位<变量序列>子程序
 		do {
 			strcat(tokenText0, "[");
 			w = gettoken(fp);
-			if (w != INT_CONST) return ERROR;
+			if (w != INT_CONST) {
+				record_parse_error("数组下标必须是整型常量");
+				return ERROR;
+			}
 			strcat(tokenText0, token_text);
 			w = gettoken(fp);
-			if (w != RM) return ERROR;
+			if (w != RM) {
+				record_parse_error("数组下标缺少右中括号");
+				return ERROR;
+			}
 			strcat(tokenText0, "]");
 			w = gettoken(fp);
 		} while (w == LM);
@@ -277,14 +330,14 @@ status VarList(FILE* fp, CTree& T)  //语法单位<变量序列>子程序
 	}
 	for (const auto& variable : semantic_variables) {
 		if (variable.scope_depth == semantic_scope_depth && variable.name == declared_name) {
-			strcpy(parser_error, "同一作用域重复定义变量");
+			record_parse_error("同一作用域重复定义变量");
 			return ERROR;
 		}
 	}
 	if (semantic_scope_depth == 0) {
 		for (const auto& function : semantic_functions) {
 			if (function.name == declared_name) {
-				strcpy(parser_error, "变量名与函数名冲突");
+				record_parse_error("变量名与函数名冲突");
 				return ERROR;
 			}
 		}
@@ -295,7 +348,7 @@ status VarList(FILE* fp, CTree& T)  //语法单位<变量序列>子程序
 		CTree initializer;
 		w = gettoken(fp);
 		if (w == COMMA || w == SEMI) {
-			strcpy(parser_error, "声明初始化缺少表达式");
+			record_parse_error("声明初始化缺少表达式");
 			return ERROR;
 		}
 		if (!exp(fp, initializer, SEMI, COMMA)) return ERROR;
@@ -304,7 +357,7 @@ status VarList(FILE* fp, CTree& T)  //语法单位<变量序列>子程序
 	}
 	if (!InsertChild(T, T.r, 1, c))	return ERROR;//识别的变量结点作为T的第一个孩子
 	if (w != COMMA && w != SEMI) {
-		strcpy(parser_error, "变量声明缺少分号或逗号");
+		record_parse_error("变量声明缺少分号或逗号");
 		return ERROR;
 	}
 	if (w == SEMI)								//如果标识符后是分号，直接结束
@@ -313,7 +366,10 @@ status VarList(FILE* fp, CTree& T)  //语法单位<变量序列>子程序
 		return OK;
 	}
 	w = gettoken(fp);
-	if (w != IDENT) return ERROR;	//如果w不是标识符则报错，反之后面还有第二个变量
+	if (w != IDENT) {
+		record_parse_error("变量声明中缺少标识符");
+		return ERROR;
+	}	//如果w不是标识符则报错，反之后面还有第二个变量
 	strcpy(tokenText0, token_text);
 	w = gettoken(fp);
 	if (!VarList(fp, t)) return ERROR;
@@ -330,7 +386,7 @@ status funcDef(FILE* fp, CTree& T)  //语法单位<函数定义>子程序
 	current_parameter_types.clear();
 	for (const auto& variable : semantic_variables) {
 		if (variable.scope_depth == 0 && variable.name == function_name) {
-			strcpy(parser_error, "变量名与函数名冲突");
+			record_parse_error("变量名与函数名冲突");
 			return ERROR;
 		}
 	}
@@ -350,7 +406,11 @@ status funcDef(FILE* fp, CTree& T)  //语法单位<函数定义>子程序
 	w = gettoken(fp);
 	//函数括号内可能无参数，可能是void，可能是参数序列，其他情况报错
 	if (w != RS && w != VOID && w != INT && w != LONG && w != SHORT && w != SIGNED && w != UNSIGNED && w != FLOAT && w != DOUBLE && w != CHAR)
+	{
+		record_parse_error("函数形参列表内容非法");
+		leave_semantic_scope();
 		return ERROR;
+	}
 	p.n = 1; p.r = 0;		//生成函数名结点
 	p.nodes[0].data = (char*)malloc((strlen(tokenText0) + strlen("函数名：") + 1) * sizeof(char));
 	strcpy(p.nodes[0].data, "函数名：");
@@ -362,21 +422,30 @@ status funcDef(FILE* fp, CTree& T)  //语法单位<函数定义>子程序
 		if (w == VOID)
 		{
 			w = gettoken(fp);
-			if (w != RS) return ERROR;
+			if (w != RS) {
+				record_parse_error("void形参后必须跟右括号");
+				leave_semantic_scope();
+				return ERROR;
+			}
 		}
 	}
 	else
 	{
-		if (!ParameList(fp, q)) return ERROR;
+		if (!ParameList(fp, q)) { leave_semantic_scope(); return ERROR; }
 		if (!InsertChild(p, p.r, 1, q)) return ERROR;
 	}
 	if (!InsertChild(T, T.r, 2, p)) return ERROR;
 	w = gettoken(fp);
-	if (w != SEMI && w != LL) return ERROR;
+	if (w != SEMI && w != LL) {
+		record_parse_error("函数声明或定义后缺少分号或左大括号");
+		leave_semantic_scope();
+		return ERROR;
+	}
 	if (w == LL) {
 		for (const auto& function : semantic_functions) {
 			if (function.name == function_name && function.is_definition) {
-				strcpy(parser_error, "函数重复定义");
+				record_parse_error("函数重复定义");
+				leave_semantic_scope();
 				return ERROR;
 			}
 		}
@@ -416,7 +485,10 @@ status ParameList(FILE* fp, CTree& T)  //语法单位<形参序列>子程序
 	if (!FormParDef(fp, c)) return ERROR;
 	if (!InsertChild(T, T.r, 1, c)) return ERROR;
 	w = gettoken(fp);
-	if (w != RS && w != COMMA) return ERROR;
+	if (w != RS && w != COMMA) {
+		record_parse_error("形参后缺少右括号或逗号");
+		return ERROR;
+	}
 	if (w == COMMA)
 	{
 		w = gettoken(fp);
@@ -444,7 +516,10 @@ status FormParDef(FILE* fp, CTree& T)  //语法单位<形参>子程序
 	c.nodes[0].indent = 1;
 	c.nodes[0].firstchild = NULL;
 	InsertChild(T, T.r, 1, c);
-	if (w != IDENT) return ERROR;
+	if (w != IDENT) {
+		record_parse_error("形参类型后缺少标识符");
+		return ERROR;
+	}
 	std::string parameter_name = token_text;
 	p.n = 1; p.r = 0;   //生成形参变量结点
 	p.nodes[0].data = (char*)malloc((strlen(token_text) + strlen("ID: ") + 1) * sizeof(char));
@@ -457,7 +532,7 @@ status FormParDef(FILE* fp, CTree& T)  //语法单位<形参>子程序
 	current_parameter_types.push_back(parameter_type);
 	for (const auto& variable : semantic_variables) {
 		if (variable.scope_depth == semantic_scope_depth && variable.name == parameter_name) {
-			strcpy(parser_error, "函数形参名称重复");
+			record_parse_error("函数形参名称重复");
 			return ERROR;
 		}
 	}
@@ -500,7 +575,11 @@ status CompStat(FILE* fp, CTree& T)  //语法单位<复合语句>子程序
 	}
 	elem = { --indent0,line_num };
 	printList.push(elem);
-	if (w != RL) return ERROR;
+	if (w != RL) {
+		record_parse_error("复合语句缺少右大括号");
+		leave_semantic_scope();
+		return ERROR;
+	}
 	w = gettoken(fp);
 	leave_semantic_scope();
 	return OK;
@@ -508,21 +587,25 @@ status CompStat(FILE* fp, CTree& T)  //语法单位<复合语句>子程序
 
 status LocVarList(FILE* fp, CTree& T)  //语法单位<局部变量定义序列>子程序
 {
-	CTree c; CTree p;//c生成局部变量定义子树，p生成可能存在的下一个局部变量定义序列子树
-	status flag;
-	if (!is_type_token(w))
-		return INFEASIBLE;
+	CTree c;
 	//读到的后继单词不为类型说明符时，变量定义序列结束
 	T.n = 1;  T.r = 0;  //生成局部变量定义序列结点
 	T.nodes[0].data = (char*)malloc((strlen("局部变量定义序列") + 1) * sizeof(char));
 	strcpy(T.nodes[0].data, "局部变量定义序列");
 	T.nodes[0].indent = 0;
 	T.nodes[0].firstchild = NULL;
-	if (!LocVarDef(fp, c)) return ERROR;
-	if (!InsertChild(T, T.r, 1, c)) return ERROR;
-	flag = LocVarList(fp, p);
-	if (flag == OK) InsertChild(T, T.r, 2, p);
-	if (!flag) return ERROR;
+	int child_index = 1;
+	while (is_type_token(w)) {
+		if (LocVarDef(fp, c)) {
+			InsertChild(T, T.r, child_index++, c);
+		}
+		else {
+			//出错已记录，跳过这条声明继续
+			synchronize(fp);
+			if (w == SEMI) { w = gettoken(fp); continue; }
+			break;
+		}
+	}
 	return OK;
 }
 
@@ -543,7 +626,10 @@ status LocVarDef(FILE* fp, CTree& T)//语法单位<局部变量定义>子程序
 	c.nodes[0].indent = 1;
 	c.nodes[0].firstchild = NULL;
 	if (!InsertChild(T, T.r, 1, c)) return ERROR;
-	if (w != IDENT) return ERROR;
+	if (w != IDENT) {
+		record_parse_error("局部变量声明缺少标识符");
+		return ERROR;
+	}
 	strcpy(tokenText0, token_text);
 	w = gettoken(fp);
 	if (!VarList(fp, p)) return ERROR;
@@ -553,24 +639,24 @@ status LocVarDef(FILE* fp, CTree& T)//语法单位<局部变量定义>子程序
 
 status StatList(FILE* fp, CTree& T)  //语法单位<语句序列>子程序
 {
-	CTree c; CTree p;  //c生成语句树,p生成可能出现的语句序列树
-	status flag;
-	flag = Statement(fp, c);
-	if (flag == INFEASIBLE) return INFEASIBLE;
-	if (!flag) return ERROR;
-	else
-	{
-		T.n = 1; T.r = 0;		//生成语句序列结点
-		T.nodes[0].data = (char*)malloc((strlen("语句序列") + 1) * sizeof(char));
-		strcpy(T.nodes[0].data, "语句序列");
-		T.nodes[0].indent = 0;
-		T.nodes[0].firstchild = NULL;
-		InsertChild(T, T.r, 1, c);
-		flag = StatList(fp, p);
-		if (!flag) return ERROR;
-		if (flag == OK)
-			if (!InsertChild(T, T.r, 2, p))
-				return ERROR;
+	CTree c;
+	T.n = 1; T.r = 0;		//生成语句序列结点
+	T.nodes[0].data = (char*)malloc((strlen("语句序列") + 1) * sizeof(char));
+	strcpy(T.nodes[0].data, "语句序列");
+	T.nodes[0].indent = 0;
+	T.nodes[0].firstchild = NULL;
+	int child_index = 1;
+	while (1) {
+		status flag = Statement(fp, c);
+		if (flag == INFEASIBLE) break;   //遇到'}'，语句序列结束
+		if (!flag) {
+			//出错已记录，跳过当前语句继续
+			synchronize(fp);
+			if (w == SEMI) { w = gettoken(fp); continue; }
+			if (w == LL) continue;   //停在'{'，把它当作下一条复合语句继续
+			break;   //停在'}'或EOF，交回上层处理
+		}
+		InsertChild(T, T.r, child_index++, c);
 	}
 	return OK;
 }
@@ -586,10 +672,16 @@ status Statement(FILE* fp, CTree& T)  //语法单位<语句>子程序
 	}
 	else if (w == IF) {//分析条件语句,p用于生成表达式树,q用于生成if模块子句数，k用于生成else模块子句数
 		w = gettoken(fp);
-		if (w != LS) return ERROR;
+		if (w != LS) {
+			record_parse_error("if后缺少左括号");
+			return ERROR;
+		}
 		w = gettoken(fp);
-		if (w == RS) return ERROR;
-		if (!exp(fp, p, RS)) return ERROR;
+		if (w == RS) {
+			record_parse_error("if条件不能为空");
+			return ERROR;
+		}
+		if (!exp(fp, p, RS)) { skip_statement_header(fp); return ERROR; }
 		c.n = 1; c.r = 0;  //生成if语句子树
 		c.nodes[0].data = (char*)malloc((strlen("条件：") + 1) * sizeof(char));
 		strcpy(c.nodes[0].data, "条件：");
@@ -693,16 +785,23 @@ status Statement(FILE* fp, CTree& T)  //语法单位<语句>子程序
 		c.nodes[0].firstchild = NULL;
 		InsertChild(T, T.r, 4, c);
 		w = gettoken(fp);
-		if (w != LS) return ERROR;
+		if (w != LS) {
+			record_parse_error("for后缺少左括号");
+			return ERROR;
+		}
 		w = gettoken(fp);
-		if (!exp(fp, c, SEMI)) return ERROR;
+		if (!exp(fp, c, SEMI)) { skip_statement_header(fp); return ERROR; }
 		InsertChild(T, T.nodes[0].firstchild->child, 1, c);
 		w = gettoken(fp);
-		if (w == SEMI) return ERROR;
-		if (!exp(fp, c, SEMI)) return ERROR;
+		if (w == SEMI) {
+			record_parse_error("for终止条件不能为空");
+			skip_statement_header(fp);
+			return ERROR;
+		}
+		if (!exp(fp, c, SEMI)) { skip_statement_header(fp); return ERROR; }
 		InsertChild(T, T.nodes[0].firstchild->next->child, 1, c);
 		w = gettoken(fp);
-		if (!exp(fp, c, RS)) return ERROR;
+		if (!exp(fp, c, RS)) { skip_statement_header(fp); return ERROR; }
 		InsertChild(T, T.nodes[0].firstchild->next->next->child, 1, c);
 		w = gettoken(fp);
 		if (w == LL)
@@ -722,10 +821,16 @@ status Statement(FILE* fp, CTree& T)  //语法单位<语句>子程序
 	}
 	else if (w == WHILE) {
 		w = gettoken(fp);
-		if (w != LS) return ERROR;
+		if (w != LS) {
+			record_parse_error("while后缺少左括号");
+			return ERROR;
+		}
 		w = gettoken(fp);
-		if (w == RS) return ERROR;
-		if (!exp(fp, c, RS)) return ERROR;
+		if (w == RS) {
+			record_parse_error("while条件不能为空");
+			return ERROR;
+		}
+		if (!exp(fp, c, RS)) { skip_statement_header(fp); return ERROR; }
 		w = gettoken(fp);
 		if (w == LL)
 		{
@@ -756,7 +861,7 @@ status Statement(FILE* fp, CTree& T)  //语法单位<语句>子程序
 		T.nodes[0].firstchild = NULL;
 		w = gettoken(fp);
 		if (w != SEMI) {
-			strcpy(parser_error, "continue语句缺少分号");
+			record_parse_error("continue语句缺少分号");
 			return ERROR;
 		}
 		w = gettoken(fp);
@@ -770,7 +875,7 @@ status Statement(FILE* fp, CTree& T)  //语法单位<语句>子程序
 		T.nodes[0].firstchild = NULL;
 		w = gettoken(fp);
 		if (w != SEMI) {
-			strcpy(parser_error, "break语句缺少分号");
+			record_parse_error("break语句缺少分号");
 			return ERROR;
 		}
 		w = gettoken(fp);
@@ -783,11 +888,14 @@ status Statement(FILE* fp, CTree& T)  //语法单位<语句>子程序
 		T.nodes[0].indent = 1;
 		T.nodes[0].firstchild = NULL;
 		w = gettoken(fp);
-		if (w == SEMI) return ERROR;
+		if (w == SEMI) {
+			record_parse_error("return缺少表达式");
+			return ERROR;
+		}
 		if (!exp(fp, c, SEMI)) return ERROR;
 		if (last_expression_type != SEM_UNKNOWN && current_function_return_type != SEM_UNKNOWN &&
 			last_expression_type != current_function_return_type) {
-			strcpy(parser_error, "return表达式类型与函数返回类型不一致");
+			record_parse_error("return表达式类型与函数返回类型不一致");
 			return ERROR;
 		}
 		w = gettoken(fp);
@@ -811,7 +919,15 @@ status Statement(FILE* fp, CTree& T)  //语法单位<语句>子程序
 		w = gettoken(fp);
 		return OK;
 	}
-	else return ERROR;
+	else {
+		//switch/do/goto/static 等未支持的关键字会走到这里
+		if (w != EOF) {
+			char msg[160];
+			snprintf(msg, sizeof(msg), "不支持的语句开头：%s", token_text);
+			record_parse_error(msg);
+		}
+		return ERROR;
+	}
 
 }
 
@@ -830,6 +946,7 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 	T.nodes[0].indent = 1;
 	T.nodes[0].firstchild = NULL;
 	int error = 0;
+	int start_error_count = parse_error_count;  //进入时已记录的错误数，用于判断本次表达式是否已报过错误
 	last_expression_end = -1;
 	last_expression_type = SEM_UNKNOWN;
 	last_expression_semantic = { SEM_UNKNOWN, 0, 0, 0 };
@@ -894,17 +1011,17 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 					node = call_node;
 					const FunctionSemanticInfo* function = find_function_info(operand_name.c_str());
 					if (!function) {
-						strcpy(parser_error, "调用了未声明的函数");
+						record_parse_error("调用了未声明的函数");
 						return ERROR;
 					}
 					if (arguments.size() != function->parameter_types.size()) {
-						strcpy(parser_error, "函数实参数量与形参不匹配");
+						record_parse_error("函数实参数量与形参不匹配");
 						return ERROR;
 					}
 					for (size_t i = 0; i < arguments.size(); i++) {
 						if (arguments[i].is_array || arguments[i].type == SEM_VOID ||
 							arguments[i].type != function->parameter_types[i]) {
-							strcpy(parser_error, "函数实参类型与形参不匹配");
+							record_parse_error("函数实参类型与形参不匹配");
 							return ERROR;
 						}
 					}
@@ -914,7 +1031,11 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 				else {
 					CTree index_expression;
 					w = gettoken(fp);
-					if (w == RM || !exp(fp, index_expression, RM)) return ERROR;
+					if (w == RM) {
+						record_parse_error("数组下标不能为空");
+						return ERROR;
+					}
+					if (!exp(fp, index_expression, RM)) return ERROR;
 					CTree* access_node = (CTree*)malloc(sizeof(CTree));
 					access_node->n = 1; access_node->r = 0;
 					access_node->nodes[0].data = (char*)malloc(strlen("数组访问") + 1);
@@ -933,7 +1054,7 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 			}
 			if (operand_was_identifier && !used_as_function_call &&
 				!find_variable_info(operand_name.c_str())) {
-				strcpy(parser_error, "使用了未声明变量");
+				record_parse_error("使用了未声明变量");
 				return ERROR;
 			}
 			Push(opn, node);			//根据w生成一个结点，结点指针进栈opn
@@ -977,36 +1098,36 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 				Push(opn, node);
 				if (is_assignment_operator(node->nodes[0].data)) {
 					if (left_semantic.is_array) {
-						strcpy(parser_error, "数组不能整体参与赋值");
+						record_parse_error("数组不能整体参与赋值");
 						error = 1;
 					}
 					else if (!left_semantic.modifiable) {
-						strcpy(parser_error, left_semantic.is_const ?
+						record_parse_error(left_semantic.is_const ?
 							"const对象不能赋值" : "赋值左侧必须是可修改对象");
 						error = 1;
 					}
 					else if (right_semantic.is_array || right_semantic.type == SEM_VOID) {
-						strcpy(parser_error, "运算符两侧类型不兼容");
+						record_parse_error("运算符两侧类型不兼容");
 						error = 1;
 					}
 					else if (!strcmp(node->nodes[0].data, "%=") &&
 						((left_semantic.type != SEM_UNKNOWN && !is_integer_semantic_type(left_semantic.type)) ||
 						(right_semantic.type != SEM_UNKNOWN && !is_integer_semantic_type(right_semantic.type)))) {
-						strcpy(parser_error, "%运算符要求整数操作数");
+						record_parse_error("%运算符要求整数操作数");
 						error = 1;
 					}
 					semantic_stack.push({ left_semantic.type, 0, 0, 0 });
 				}
 				else if (left_semantic.is_array || right_semantic.is_array ||
 					left_semantic.type == SEM_VOID || right_semantic.type == SEM_VOID) {
-					strcpy(parser_error, "运算符两侧类型不兼容");
+					record_parse_error("运算符两侧类型不兼容");
 					error = 1;
 					semantic_stack.push({ SEM_UNKNOWN, 0, 0, 0 });
 				}
 				else if (!strcmp(node->nodes[0].data, "%") &&
 					((left_semantic.type != SEM_UNKNOWN && !is_integer_semantic_type(left_semantic.type)) ||
 					(right_semantic.type != SEM_UNKNOWN && !is_integer_semantic_type(right_semantic.type)))) {
-					strcpy(parser_error, "%运算符要求整数操作数");
+					record_parse_error("%运算符要求整数操作数");
 					error = 1;
 					semantic_stack.push({ SEM_UNKNOWN, 0, 0, 0 });
 				}
@@ -1033,12 +1154,20 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 		}//遇到结束标记，w被替换成#
 		else {
 			if (endsym == SEMI && (w == RL || w == EOF))
-				strcpy(parser_error, "表达式语句缺少分号");
+				record_parse_error("表达式语句缺少分号");
+			else if (w == STRING_CONST)
+				record_parse_error("字符串常量不能参与表达式");
 			error = 1;
 		}
 		GetTop(op, node);
 	}
-	if (error) return ERROR;
+	if (error) {
+		//结构类错误（括号不匹配、运算符缺少操作数等）没有具体原因时给个兜底说明
+		if (parse_error_count == start_error_count) {
+			record_parse_error("表达式语法错误");
+		}
+		return ERROR;
+	}
 	GetTop(opn, node);
 	InsertChild(T, T.r, 1, *node);
 	if (!semantic_stack.empty()) {

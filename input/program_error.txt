@@ -1,143 +1,147 @@
 /* program_error.txt —— 语法分析错误清单
- * 语法分析和词法分析不一样，碰到第一个错误就停，所以整个文件跑起来只会报第一个。
- * 想单独看某个错误，把它那段复制到新文件再跑就行。
- * 报错分两种：语义/类型检查会带上“错误原因：xxx”，结构文法错误只报“发生生成错误”加行号。 */
+ * 整个文件跑一遍语法分析，可以一次性看到所有错误（每个用例的标识符
+ * 都取了独立的名字，互不干扰）；想单独看某个错误，把它那段复制到
+ * 新文件再跑也行。 */
 
 /* ===== 一、类型和变量声明 ===== */
 
-/* 01 类型说明符组合不合法，会报“非法的类型说明符组合” */
-int char x;
+/* 01 类型说明符组合不合法 */
+int char x1;
 
-/* 02 类型后面忘了写变量名，只报发生生成错误 */
+/* 02 类型后面忘了写变量名 */
 int ;
 
 /* 03 同一个作用域里变量重复定义 */
-int x;
-int x;
+int x3;
+int x3;
 
 /* 04 变量名和函数名撞了（先变量后函数、先函数后变量都会报） */
-int f;
-int f() { return 0; }
+int f4;
+int f4() { return 0; }
 
 /* 05 等号后面没有初始化表达式 */
-int x = ;
+int x5 = ;
 
 /* 06 变量声明少了分号或逗号 */
-int x y;
+int x6 y6;
 
 /* 07 数组下标必须是整型常量，不能是变量 */
-int a[x];
+int a7[x7];
 
 /* 08 数组下标少了右中括号 */
-int a[3;
+int a8[3;
 
 /* ===== 二、函数 ===== */
 
 /* 09 形参名重复了 */
-int f(int a, int a) { return a; }
+int f9(int a9, int a9) { return a9; }
 
 /* 10 函数重复定义（先写原型再定义不算重复） */
-int f() { return 0; }
-int f() { return 0; }
+int f10() { return 0; }
+int f10() { return 0; }
 
 /* 11 调用了一个没声明过的函数 */
-int f() { return g(); }
+int f11() { return g11(); }
 
 /* 12 实参个数和形参对不上 */
-int f(int a) { return a; }
-int g() { return f(); }
+int f12(int a12) { return a12; }
+int g12() { return f12(); }
 
 /* 13 实参类型和形参对不上 */
-int f(int a) { return a; }
-int g() { return f(1.0); }
+int f13(int a13) { return a13; }
+int g13() { return f13(1.0); }
 
 /* 14 形参列表括号里的东西不合法 */
-int f(, int a) { return a; }
+int f14(, int a14) { return a14; }
 
 /* 15 写了 void 形参后面还跟了别的 */
-int f(void int a) { return 0; }
+int f15(void int a15) { return 0; }
 
 /* 16 函数声明/定义后面少了分号或左大括号 */
-int f() = 0;
+int f16() = 0;
 
 /* 17 形参后面少了右括号或逗号 */
-int f(int a int b) { return a; }
+int f17(int a17 int b17) { return a17; }
 
 /* 18 形参类型后面少了形参名 */
-int f(int) { return 0; }
+int f18(int) { return 0; }
 
 /* ===== 三、复合语句 ===== */
-
-/* 19 复合语句少了右大括号 */
-int f() { return 0;
+/* 缺右大括号会把它后面的内容都吞进函数体里，
+ * 所以用例 19 挪到了整个文件的末尾 */
 
 /* ===== 四、选择语句 ===== */
 
 /* 20 if 后面少了左括号 */
-int f() { if a) return 0; return 0; }
+int f20() { if a20) return 0; return 0; }
 
 /* 21 if 的条件不能为空 */
-int f() { if () return 0; return 0; }
+int f21() { if () return 0; return 0; }
 
 /* ===== 五、循环语句 ===== */
 
 /* 22 for 后面少了左括号 */
-int f() { for ; return 0; }
+int f22() { for ; return 0; }
 
 /* 23 for 的终止条件不能为空（初始表达式和循环表达式可以空） */
-int f() { int i; for (i = 0; ; i = i + 1) return 0; }
+int f23() { int i23; for (i23 = 0; ; i23 = i23 + 1) return 0; }
 
 /* 24 while 后面少了左括号 */
-int f() { while a) return 0; return 0; }
+int f24() { while a24) return 0; return 0; }
 
 /* 25 while 的条件不能为空 */
-int f() { while () return 0; return 0; }
+int f25() { while () return 0; return 0; }
 
 /* ===== 六、跳转语句 ===== */
 
 /* 26 continue 后面少了分号 */
-int f() { continue 0; }
+int f26() { continue 0; }
 
 /* 27 break 后面少了分号 */
-int f() { break 0; }
+int f27() { break 0; }
 
 /* 28 return 必须带一个表达式，不能光写 return; */
-int f() { return; }
+int f28() { return; }
 
 /* 29 return 的表达式类型和函数返回类型不一致 */
-int f() { return 1.0; }
+int f29() { return 1.0; }
 
 /* ===== 七、表达式语句 ===== */
 
 /* 30 用了一个没声明过的变量 */
-int f() { return x; }
+int f30() { return x30; }
 
 /* 31 数组不能整体参与赋值，只能按下标来 */
-int a[3];
-int f() { a = 1; return 0; }
+int a31[3];
+int f31() { a31 = 1; return 0; }
 
 /* 32 const 对象不能被赋值 */
-const int a = 5;
-int f() { a = 6; return 0; }
+const int a32 = 5;
+int f32() { a32 = 6; return 0; }
 
 /* 33 赋值等号左边必须是能修改的东西 */
-int f() { 5 = 3; return 0; }
+int f33() { 5 = 3; return 0; }
 
 /* 34 运算符两边的类型不兼容 */
-int a[3];
-int f() { return a + 1; }
+int a34[3];
+int f34() { return a34 + 1; }
 
 /* 35 取模要求两边都是整数 */
-int f() { return 1.0 % 2; }
+int f35() { return 1.0 % 2; }
 
 /* 36 表达式语句少了分号 */
-int a;
-int f() { a = 1 }
+int a36;
+int f36() { a36 = 1 }
 
 /* ===== 八、没支持的关键字 ===== */
 
 /* 37 switch / do / goto / case / default 这些还没实现 */
-int f() { goto x; }
+int f37() { goto x37; }
 
 /* 另外 program.txt 里刻意避开的写法：指针、数组形参、一元运算、 */
 /* sizeof、逗号表达式、花括号初始化 */
+
+/* ===== 三、复合语句（续，放最后） ===== */
+
+/* 19 复合语句少了右大括号（放最后是因为它会吞掉后面所有内容） */
+int f19() { return 0;
