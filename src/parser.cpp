@@ -141,24 +141,22 @@ status VarList(FILE* fp, CTree& T)  //语法单位<变量序列>子程序
 	T.nodes[0].firstchild = NULL;
 	if (w == LM)     //区分是数组变量还是变量
 	{
-		strcat(tokenText0, "[");  //识别数组，只支持一维数组
-		if ((w = gettoken(fp)) == INT_CONST)
-		{
+		do {
+			strcat(tokenText0, "[");
+			w = gettoken(fp);
+			if (w != INT_CONST) return ERROR;
 			strcat(tokenText0, token_text);
-			if ((w = gettoken(fp)) == RM)
-			{
-				strcat(tokenText0, "]");  //识别数组成功
-				c.n = 1; c.r = 0;   //创建数组结点
-				c.nodes[0].data = (char*)malloc((strlen(tokenText0) + strlen("Array: ") + 1) * sizeof(char));
-				strcpy(c.nodes[0].data, "Array: ");
-				strcat(c.nodes[0].data, tokenText0); // 初始时，tokenText0保存了第一个变量名
-				c.nodes[0].indent = 1;
-				c.nodes[0].firstchild = NULL;
-				w = gettoken(fp);
-			}
-			else return ERROR;
-		}
-		else return ERROR;
+			w = gettoken(fp);
+			if (w != RM) return ERROR;
+			strcat(tokenText0, "]");
+			w = gettoken(fp);
+		} while (w == LM);
+		c.n = 1; c.r = 0;   //创建多维数组结点
+		c.nodes[0].data = (char*)malloc((strlen(tokenText0) + strlen("Array: ") + 1) * sizeof(char));
+		strcpy(c.nodes[0].data, "Array: ");
+		strcat(c.nodes[0].data, tokenText0);
+		c.nodes[0].indent = 1;
+		c.nodes[0].firstchild = NULL;
 	}
 	else
 	{
