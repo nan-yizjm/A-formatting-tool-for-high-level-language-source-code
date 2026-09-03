@@ -1,4 +1,4 @@
-# 帮我写一个 CMakeLists.txt 的模板
+# CMakeLists.txt 的模板
 cmake_minimum_required(VERSION 3.15)
 project(CapstoneProject LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)

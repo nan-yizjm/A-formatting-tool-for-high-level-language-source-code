@@ -13,7 +13,7 @@ identifier.with_dot
 /* 05 非法十六进制整数：缺少数字或包含非十六进制字符 */
 0x 0X 0xG 0X12Z
 
-/* 06 当前可检测的单位十进制数字后直接连接标识符字符 */
+/* 06 十进制数字后直接连接标识符字符 */
 1abc 2_name
 
 /* 07 不完整或非法的科学计数法指数 */
@@ -38,5 +38,5 @@ identifier.with_dot
 "string crosses
 the physical line"
 
-/* 14 文件末尾的块注释没有闭合；必须放在最后，因为它会读取到EOF */
+/* 14 文件末尾的块注释没有闭合 */
 /* unterminated block comment

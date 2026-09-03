@@ -453,40 +453,30 @@ stationERROR:
 			token_text[i] = '\0';
 			return DIVIDE_EQUAL;
 		}
-		else if (c == '/') {   //判断行注释
+		else if (c == '/') {   //判断行注释：只跳过不缓存，避免长注释撑爆 token_text
 			do {
-				token_text[i++] = c;
 				c = fgetc(fp);
 			} while (c != '\n' && c != EOF);
 			if (c == '\n'|| c == EOF) {
 				ungetc(c, fp);
-				token_text[i] = '\0';
 				return LINENOTE;
 			}
 		}
-		else if (c == '*') {   //判断块注释
-station2://临时判断是否是*/的情况
-			do {
-				token_text[i++] = c;
-				c = fgetc(fp);
-			} while (c != '\n' && c != EOF&&c!='*');
-			if (c == '*') {
-				token_text[i++] = c;
-				c = fgetc(fp);
-				if (c == '/') {
-					token_text[i++] = c;
-					token_text[i] = '\0';
-					return BLOCKNOTE;
+		else if (c == '*') {   //判断块注释：只跳过不缓存，避免长注释撑爆 token_text
+			while ((c = fgetc(fp)) != EOF) {
+				if (c == '*') {
+					c = fgetc(fp);
+					if (c == '/') return BLOCKNOTE;
+					if (c == EOF) break;
+					if (c == '\n') line_num++;
 				}
-				else goto station2;
+				else if (c == '\n') {
+					line_num++;
+				}
 			}
-			else if (c == '\n') {
-				line_num++;
-				goto station2;
-			}
-			else if (c == EOF) {
-				goto stationERROR;
-			}
+			strcpy(token_text, "/*");
+			strcpy(token_error, "未闭合的块注释");
+			return ERROR_TOKEN;
 		}
 		else {
 			ungetc(c, fp);

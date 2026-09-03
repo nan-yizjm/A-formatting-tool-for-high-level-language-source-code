@@ -1,0 +1,158 @@
+/* program.txt —— 语法分析演示用例
+ * 覆盖当前支持的全部语法单位，跑一遍语法分析应该零错误。 */
+
+/* 预处理指令：两种 include 和单 token 宏定义 */
+#include <stdio.h>
+#include "stdlib.h"
+#define LIMIT 100
+
+/* 下面把基本类型常见的组合都声明一遍，
+ * char、short、int、long、float、double 以及 signed/unsigned 修饰 */
+char g_char;
+signed char g_schar;
+unsigned char g_uchar;
+short g_short;
+short int g_short_int;
+signed short g_sshort;
+signed short int g_sshort_int;
+unsigned short g_ushort;
+unsigned short int g_ushort_int;
+int g_int;
+signed g_signed;
+signed int g_signed_int;
+unsigned g_unsigned;
+unsigned int g_uint;
+long g_long;
+long int g_long_int;
+signed long g_slong;
+signed long int g_slong_int;
+unsigned long g_ulong;
+unsigned long int g_ulong_int;
+float g_float;
+double g_double;
+long double g_ldouble;
+
+/* 再试试多变量、多维数组、初始化和 const */
+int g_count, g_total = 10, g_temp;
+int matrix[2][3];
+double g_ratio = 0.5;
+char g_initial = 'A';
+const int g_const = LIMIT;
+
+/* 函数原型，只声明不定义，方便后面提前调用 */
+int add(int a, int b);
+double scale(double x, double y);
+float half(float v);
+void fill_zero(void);
+
+/* 函数定义：带参、无参、void 参数、void 返回都各来一个 */
+int add(int a, int b)
+{
+    return a + b;
+}
+
+double scale(double x, double y)
+{
+    return x * y;
+}
+
+float half(float v)
+{
+    return v / 2.0f;
+}
+
+void fill_zero(void)
+{
+    g_count = 0;
+}
+
+/* 复合语句、选择、循环、跳转、表达式语句都放进下面的 main 里演示 */
+int main(void)
+{
+    /* 复合语句：开头这一堆是局部变量声明，语句序列跟在后面 */
+    int a = 1;
+    int b = 2;
+    int c;
+    int i;
+    int j;
+    int local_array[3];
+    int table[2][2];
+    double ratio = 1.5;
+    float fval = 2.0f;
+    char grade = 'A';
+
+    /* 表达式语句：赋值和五种复合赋值 */
+    a += 1;
+    b -= 1;
+    c = a + b;
+    c *= 2;
+    c /= 2;
+    c %= 3;
+
+    /* 表达式语句：加减乘除取模，优先级按标准 C 走 */
+    c = a + b * c;
+    c = (a + b) * (c - a);
+    c = a / b;
+    c = a % b;
+
+    /* 表达式语句：比较和逻辑运算 */
+    i = (a > b);
+    i = (a < b);
+    i = (a >= b);
+    i = (a <= b);
+    i = (a == b);
+    i = (a != b);
+    i = (a > b) && (c < b);
+    i = (a > b) || (c < b);
+
+    /* 表达式语句：一维和二维数组的下标访问 */
+    local_array[0] = a;
+    table[0][1] = b;
+    table[1][1] = local_array[0];
+
+    /* 表达式语句：调用前面定义的函数，返回值还能接着参与运算 */
+    c = add(a, b);
+    c = add(a, b) * 2;
+    ratio = scale(ratio, 1.5);
+    fval = half(fval);
+
+    /* 选择语句：if、if-else、嵌套和 else if 链 */
+    if (a > b)
+        c = a;
+    else
+        c = b;
+
+    if (a == b) {
+        c = 0;
+    }
+
+    if (a > b) {
+        if (c > a) {
+            c = 1;
+        } else {
+            c = 2;
+        }
+    } else if (b > a) {
+        c = 3;
+    }
+
+    /* 循环语句：for，循环体里用 continue 和 break 做跳转 */
+    for (i = 0; i < g_const; i = i + 1) {
+        local_array[0] = local_array[0] + i;
+        if (i == 5) {
+            continue;
+        }
+        if (i > 8) {
+            break;
+        }
+    }
+
+    /* 循环语句：while */
+    j = 0;
+    while (j < g_total) {
+        j = j + 1;
+    }
+
+    /* 跳转语句：return 返回，类型要和函数返回类型对得上 */
+    return c;
+}
