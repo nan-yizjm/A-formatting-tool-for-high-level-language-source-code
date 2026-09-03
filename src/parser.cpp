@@ -895,7 +895,17 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 							"const对象不能赋值" : "赋值左侧必须是可修改对象");
 						error = 1;
 					}
+					else if (right_semantic.is_array || right_semantic.type == SEM_VOID) {
+						strcpy(parser_error, "运算符两侧类型不兼容");
+						error = 1;
+					}
 					semantic_stack.push({ left_semantic.type, 0, 0, 0 });
+				}
+				else if (left_semantic.is_array || right_semantic.is_array ||
+					left_semantic.type == SEM_VOID || right_semantic.type == SEM_VOID) {
+					strcpy(parser_error, "运算符两侧类型不兼容");
+					error = 1;
+					semantic_stack.push({ SEM_UNKNOWN, 0, 0, 0 });
 				}
 				else if (!strcmp(node->nodes[0].data, "==") || !strcmp(node->nodes[0].data, "!=") ||
 					!strcmp(node->nodes[0].data, ">") || !strcmp(node->nodes[0].data, "<") ||
