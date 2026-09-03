@@ -169,8 +169,18 @@ stationE:  //e/E的情况
 		}
 		else if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_') {
 stationERROR:
-			ungetc(c, fp);
+			if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+				(c >= '0' && c <= '9') || c == '_') {
+				do {
+					token_text[i++] = (char)c;
+					c = fgetc(fp);
+				} while ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+					(c >= '0' && c <= '9') || c == '_' || c == '.');
+			}
+			if (c != EOF) ungetc(c, fp);
 			token_text[i] = '\0';
+			if (token_text[0] >= '0' && token_text[0] <= '9')
+				strcpy(token_error, "非法数值常量");
 			return ERROR_TOKEN;
 		}
 		else {
@@ -258,7 +268,9 @@ stationERROR:
 		}
 		else {
 			strcpy(token_error, "不支持的符号");
-			goto stationERROR;
+			if (c != EOF) ungetc(c, fp);
+			token_text[i] = '\0';
+			return ERROR_TOKEN;
 		}
 	}
 
