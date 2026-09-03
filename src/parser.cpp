@@ -257,6 +257,7 @@ status VarList(FILE* fp, CTree& T)  //语法单位<变量序列>子程序
 		c.nodes[0].indent = 1;
 		c.nodes[0].firstchild = NULL;
 	}
+	semantic_variables.push_back({ declared_name, declared_type, declared_as_array, declared_as_const });
 	if (w == EQUAL_TO) {
 		CTree initializer;
 		w = gettoken(fp);
@@ -269,7 +270,6 @@ status VarList(FILE* fp, CTree& T)  //语法单位<变量序列>子程序
 		w = last_expression_end;
 	}
 	if (!InsertChild(T, T.r, 1, c))	return ERROR;//识别的变量结点作为T的第一个孩子
-	semantic_variables.push_back({ declared_name, declared_type, declared_as_array, declared_as_const });
 	if (w != COMMA && w != SEMI) {
 		strcpy(parser_error, "变量声明缺少分号或逗号");
 		return ERROR;
@@ -786,6 +786,7 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 			SemanticType operand_type = SEM_UNKNOWN;
 			ExpressionSemantic operand_semantic = { SEM_UNKNOWN, 0, 0, 0 };
 			int operand_was_identifier = w == IDENT;
+			int used_as_function_call = 0;
 			std::string operand_name = token_text;
 			if (operand_was_identifier) {
 				const VariableSemanticInfo* variable = find_variable_info(token_text);
@@ -808,6 +809,7 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 			w = gettoken(fp);
 			while (operand_was_identifier && (w == LS || w == LM)) {
 				if (w == LS) {
+					used_as_function_call = 1;
 					CTree* call_node = (CTree*)malloc(sizeof(CTree));
 					call_node->n = 1; call_node->r = 0;
 					std::string label = "函数调用：" + operand_name;
@@ -850,6 +852,11 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 						0, variable ? variable->is_const : 0 };
 					w = gettoken(fp);
 				}
+			}
+			if (operand_was_identifier && !used_as_function_call &&
+				!find_variable_info(operand_name.c_str())) {
+				strcpy(parser_error, "使用了未声明变量");
+				return ERROR;
 			}
 			Push(opn, node);			//根据w生成一个结点，结点指针进栈opn
 			semantic_stack.push(operand_semantic);
