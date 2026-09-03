@@ -560,10 +560,11 @@ station2://临时判断是否是*/的情况
 				return finish_invalid_char_constant(fp, c, i);
 			}
 		}
-		else if (c == '\'') {  //判断'''的情况
-			c = fgetc(fp);
-			if (c == '\'') return ERROR_TOKEN;
-			else goto stationERROR;
+		else if (c == '\'') {  //空字符常量
+			token_text[i++] = (char)c;
+			token_text[i] = '\0';
+			strcpy(token_error, "空字符常量");
+			return ERROR_TOKEN;
 		}
 		else {  //判断‘x’的情况，x不能为'和\在上面讨论过
 			token_text[i++] = c;
