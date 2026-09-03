@@ -894,107 +894,36 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 
 char precede(char* a, char* b)
 {
-	int i, j;		//指示运算符对应的编号
-	//定义一个二维数组，用于存放优先级
-	char precede[13][13] =
-	{   //				 +		 -		 *		 /		 %		（		 ）	  	 =		>和<	  ==和!=		 #		&&		||
-		/* + */			'>',	'>',	'<',	'<',	'<',	'<',	'>',	'?',	'>',		'>',		'>',	'>',	'>',
-		/* - */			'>',	'>',	'<',	'<',	'<',	'<',	'>',	'?',	'>',		'>',		'>',	'>',	'>',
-		/* * */			'>',	'>',	'>',	'>',	'>',	'<',	'>',	'?',	'>',		'>',		'>',	'>',	'>',
-		/* / */			'>',	'>',	'>',	'>',	'>',	'<',	'>',	'?',	'>',		'>',		'>',	'>',	'>',
-		/* % */			'>',	'>',	'<',	'<',	'<',	'<',	'>',	'?',	'>',		'>',		'>',	'>',	'>',
-		/* ( */			'<',	'<',	'<',	'<',	'<',	'<',	'=',	'?',	'<',		'<',		'>',	'<',	'<',
-		/* ) */			'>',	'>',	'>',	'>',	'>',	'>',	'?',	'?',	'>',		'>',		'>',	'>',	'>',
-		/* = */			'<',	'<',	'<',	'<',	'<',	'<',	'?',	'<',	'<',		'<',		'>',	'<',	'<',
-		/* >和< */		'<',	'<',	'<',	'<',	'<',	'<',	'>',	'?',	'>',		'>',		'>',	'>',	'>',
-		/* ==和!= */	'<',	'<',	'<',	'<',	'<',	'<',	'>',	'?',	'<',		'>',		'>',	'>',	'>',
-		/* # */			'<',	'<',	'<',	'<',	'<',	'<',	'?',	'<',	'<',		'<',		'=',	'<',	'<',
-		/* && */		'<',	'<',	'<',	'<',	'<',	'<',	'>',	'>',	'<',		'<',		'>',	'>',	'>',
-		/* || */		'<',	'<',	'<',	'<',	'<',	'<',	'>',	'>',	'<',		'<',		'>',	'>',	'>'
+	auto is_assignment = [](const char* op) {
+		return !strcmp(op, "=") || !strcmp(op, "+=") || !strcmp(op, "-=") ||
+			!strcmp(op, "*=") || !strcmp(op, "/=") || !strcmp(op, "%=");
 	};
-	switch (a[0])
-	{
-	case '+':
-		i = a[1] == '=' ? 7 : 0; break;
-	case '-':
-		i = a[1] == '=' ? 7 : 1; break;
-	case '*':
-		i = a[1] == '=' ? 7 : 2; break;
-	case '/':
-		i = a[1] == '=' ? 7 : 3; break;
-	case '%':
-		i = a[1] == '=' ? 7 : 4; break;
-	case '(':
-		i = 5; break;
-	case ')':
-		i = 6; break;
-	case '=':
-		if (a[1] == '=') i = 9;
-		else i = 7;
-		break;
-	case '>':
-	case '<':
-		i = 8; break;
-	case '!':
-		if (a[1] == '=') i = 9;
-		else return '?';
-		break;
-	case '#':
-		i = 10;
-		break;
-	case '&':
-		if (a[1] == '&') i = 11;
-		else return '?';
-		break;
-	case '|':
-		if (a[1] == '|') i = 12;
-		else return '?';
-		break;
-	default:
-		return '?';
-	}
-	switch (b[0])
-	{
-	case '+':
-		j = b[1] == '=' ? 7 : 0; break;
-	case '-':
-		j = b[1] == '=' ? 7 : 1; break;
-	case '*':
-		j = b[1] == '=' ? 7 : 2; break;
-	case '/':
-		j = b[1] == '=' ? 7 : 3; break;
-	case '%':
-		j = b[1] == '=' ? 7 : 4; break;
-	case '(':
-		j = 5; break;
-	case ')':
-		j = 6; break;
-	case '=':
-		if (b[1] == '=') j = 9;
-		else j = 7;
-		break;
-	case '>':
-	case '<':
-		j = 8; break;
-	case '!':
-		if (b[1] == '=') j = 9;
-		else return '?';
-		break;
-	case '#':
-		j = 10;
-		break;
-	case '&':
-		if (b[1] == '&') j = 11;
-		else return '?';
-		break;
-	case '|':
-		if (b[1] == '|') j = 12;
-		else return '?';
-		break;
-	default:
-		return '?';
-	}
-	return precede[i][j];
+	auto priority = [&](const char* op) {
+		if (is_assignment(op)) return 1;
+		if (!strcmp(op, "||")) return 2;
+		if (!strcmp(op, "&&")) return 3;
+		if (!strcmp(op, "==") || !strcmp(op, "!=")) return 4;
+		if (!strcmp(op, "<") || !strcmp(op, ">") ||
+			!strcmp(op, "<=") || !strcmp(op, ">=")) return 5;
+		if (!strcmp(op, "+") || !strcmp(op, "-")) return 6;
+		if (!strcmp(op, "*") || !strcmp(op, "/") || !strcmp(op, "%")) return 7;
+		return -1;
+	};
+
+	if (!strcmp(a, "#") && !strcmp(b, "#")) return '=';
+	if (!strcmp(a, "#")) return strcmp(b, ")") ? '<' : '?';
+	if (!strcmp(a, "(") && !strcmp(b, ")")) return '=';
+	if (!strcmp(a, "(")) return strcmp(b, "#") ? '<' : '?';
+	if (!strcmp(b, "(")) return '<';
+	if (!strcmp(b, ")") || !strcmp(b, "#")) return '>';
+	if (!strcmp(a, ")")) return '>';
+
+	int left_priority = priority(a);
+	int right_priority = priority(b);
+	if (left_priority < 0 || right_priority < 0) return '?';
+	if (left_priority < right_priority) return '<';
+	if (left_priority > right_priority) return '>';
+	return is_assignment(a) ? '<' : '>';
 }
 
 status PrintTree(char* data, int indent) //打印函数
