@@ -603,12 +603,16 @@ station2://临时判断是否是*/的情况
 			}
 			else if (c == '\n') { //判断直接换行情况【亮点】
 				line_num++;
-				do {
-					token_text[i++] = c;
-					c = fgetc(fp);
-				} while (c != '"' && c != '\n' && c != EOF);
-				if (c == '"') { return ERROR_TOKEN; }
-				else goto stationERROR;
+				while ((c = fgetc(fp)) != '"' && c != '\n' && c != EOF)
+					token_text[i++] = (char)c;
+				if (c == '"') token_text[i++] = (char)c;
+				else if (c == '\n') {
+					token_text[i++] = (char)c;
+					line_num++;
+				}
+				token_text[i] = '\0';
+				strcpy(token_error, "非法字符串常量");
+				return ERROR_TOKEN;
 			}
 			else if (c == EOF) goto stationERROR;
 		}
