@@ -120,17 +120,15 @@ status pre_process(FILE* fp, const char* source_path) {
 					if ((container = fgetc(fp)) != ';') { ungetc(container, fp); w = gettoken(fp); pre_line_num = line_num; continue; }
 					else return ERROR;
 				}
-				else if (w == LESS) {
+				else if (w == HEADER_NAME) {  //token_text形如<stdio.h>，去掉尖括号得到头文件名
 					char header_name[100];
-					int header_length = 0;
-					int header_char;
-					while ((header_char = fgetc(fp)) != EOF && header_char != '>' &&
-						header_char != '\n') {
-						if (header_length >= 99) return ERROR;
-						header_name[header_length++] = (char)header_char;
+					int header_length = (int)strlen(token_text);
+					if (header_length >= 3 && token_text[0] == '<' && token_text[header_length - 1] == '>') {
+						int name_length = header_length - 2;
+						strncpy(header_name, token_text + 1, name_length);
+						header_name[name_length] = '\0';
 					}
-					header_name[header_length] = '\0';
-					if (header_char != '>' || header_length == 0) return ERROR;
+					else return ERROR;  //缺少右尖括号或名字为空
 					strcpy(data_Inculd[j++].string, header_name);
 					if (!expand_include(mid_fp, header_name, source_path, 0)) return ERROR;
 					if ((container = fgetc(fp)) != ';') { ungetc(container, fp); w = gettoken(fp); pre_line_num = line_num; continue; }

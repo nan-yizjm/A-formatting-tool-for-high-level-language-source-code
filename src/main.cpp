@@ -122,6 +122,9 @@ Choosefile:
 				case STRING_CONST:
 					printf("	字符串常量				%s\n", token_text);
 					break;
+				case HEADER_NAME:
+					printf("	头文件				%s\n", token_text);
+					break;
 				case EQUAL_TO:
 					printf("	赋值运算符				=\n");
 					break;

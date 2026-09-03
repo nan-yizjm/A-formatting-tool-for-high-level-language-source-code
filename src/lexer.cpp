@@ -10,6 +10,9 @@ keyword n[IDENT] = {
 	{"include",INCLUDE},{"define",DEFINE}
 };
 
+static int just_saw_pound = 0;    //上一个单词是#
+static int expect_header_name = 0; //刚识别完#include，等待<头文件名>
+
 static int finish_invalid_char_constant(FILE* fp, int c, int i)
 {
 	while (c != '\'' && c != '\n' && c != EOF) {
@@ -33,9 +36,13 @@ int gettoken(FILE* fp) {
 	while (( c = fgetc(fp)) == ' ' || c == '\n'|| c == '\t'|| c == '\r' ||c==EOF)  //跳过空白符和制表符
 	{
 		if (c == '\n') line_num++;	//读取换行符时计数
-		if (c == EOF) return EOF;
+		if (c == EOF) { just_saw_pound = 0; expect_header_name = 0; return EOF; }
 	}
-	if (c == EOF) return EOF;
+	if (c == EOF) { just_saw_pound = 0; expect_header_name = 0; return EOF; }
+	//include状态机：#后面只关心关键字include，include后面只关心<头文件名>
+	if (expect_header_name && c != '<') expect_header_name = 0;
+	if (just_saw_pound && !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'))
+		just_saw_pound = 0;
 	//判断标识符或者关键字
 	if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
 		do {
@@ -46,19 +53,25 @@ int gettoken(FILE* fp) {
 		ungetc(c, fp);
 
 		for (; j < IDENT; j++) {
-			if (!strcmp(token_text, n[j].key)) return n[j].enum_key;
+			if (!strcmp(token_text, n[j].key)) {
+				if (just_saw_pound && n[j].enum_key == INCLUDE) expect_header_name = 1;
+				just_saw_pound = 0;
+				return n[j].enum_key;
+			}
 		}
+		just_saw_pound = 0;
 		return IDENT;
 	}
 
 	//判断标识符
-	if (c == '_') { 
+	if (c == '_') {
 		do {
 			token_text[i++] = c;
 			c = fgetc(fp);
 		} while ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || (c >= '0' && c <= '9'));
 		token_text[i] = '\0';
 		ungetc(c, fp);
+		just_saw_pound = 0;
 		return IDENT;
 	}
 
@@ -331,6 +344,7 @@ stationERROR:
 	case'#':
 		token_text[i++] = c;
 		token_text[i] = '\0';
+		just_saw_pound = 1;
 		return POUND;
 
 	case'>':
@@ -348,6 +362,20 @@ stationERROR:
 		}
 
 	case'<':
+		if (expect_header_name) {  //#include后面的<...>整体作为头文件名，不再拆分
+			expect_header_name = 0;
+			token_text[0] = '<';
+			i = 1;
+			while ((c = fgetc(fp)) != EOF && c != '>' && c != '\n') {
+				if (i < 99) token_text[i++] = (char)c;
+			}
+			if (c == '>') {
+				if (i < 99) token_text[i++] = '>';
+			}
+			else if (c == '\n') line_num++;
+			token_text[i] = '\0';
+			return HEADER_NAME;
+		}
 		token_text[i++] = c;
 		c = fgetc(fp);
 		if (c == '=') {

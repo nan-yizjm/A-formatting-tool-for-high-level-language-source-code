@@ -1,5 +1,10 @@
-"abc_def"
-"abc\
-abc"
-""
-"\abcabc"
+//#include<stdio.h>
+//int b[30];int a_3;
+//int func(int a,int b);int a=3UL;
+//int func(int a,int b){if(a>b){return a-b;}
+//else{return a+b;}}
+//int main(){int i;for(i=0;i<3;i++){a_3 =4;}return 0;}
+
+
+int func(int a,int b){if(a>b){return a-b;}
+else{return a+b;}}

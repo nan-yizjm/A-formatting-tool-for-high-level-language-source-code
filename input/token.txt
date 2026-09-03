@@ -1,10 +1,11 @@
-/* 01 预处理：尖括号头文件、引号头文件、单Token对象宏 */
+/* 01 预处理：尖括号头文件、引号头文件 */
 #include <stdio.h>
 #include "stdlib.h"
-#define DEMO_NUMBER 42
-DEMO_NUMBER
 
-/* 02 C90关键字：按类型、声明、控制流的顺序排列 */
+/* 02 单Token宏声明 */
+#define DEMO_NUMBER 42
+
+/* 03 C90 32个全部关键字 */
 char short int long signed unsigned float double void
 struct union enum const volatile
 auto register static extern typedef
@@ -12,34 +13,36 @@ if else switch case default
 for while do
 break continue return goto sizeof
 
-/* 03 本工具额外识别的预处理名称 */
-include define
-
-/* 04 标识符：字母开头、下划线开头、混合数字和大小写 */
+/* 04 标识符 */
 identifier _private value1 Mixed_Case_2026
 
 /* 05 十进制、八进制、十六进制整数 */
-0 7 42 0123 0777 0x0 0x1A 0Xabcdef
+0 7 42 
+0123 0777 
+0x0 0x1A 0Xabcdef
 
 /* 06 整数后缀：无符号、长整型、无符号长整型 */
 12u 12U 12l 12L 12ul 12uL 12Ul 12UL
 
 /* 07 浮点数：小数点、科学计数法、正负指数 */
-0.0 1. .5 12.34 1e2 0e2 12E3 1.2e-3 1e+2
+0.0 1. .5 12.34 
+1e2 0e2 12E3 
+1.2e-3 1e+2
 
 /* 08 浮点后缀：float和long double */
-1.0f 1.0F 1e2f 1E2F .5l .5L 1e-2l 1e+2L
+1.0f 1.0F 1e2f 1E2F 
+.5l .5L 1e-2l 1e+2L
 
 /* 09 普通字符常量 */
 'a' 'Z' '0' ' ' '"'
 
-/* 10 标准简单转义字符 */
+/* 10 基本转义字符 */
 '\'' '\"' '\?' '\\' '\a' '\b' '\f' '\n' '\r' '\t' '\v'
 
 /* 11 八进制和十六进制字符转义 */
 '\0' '\7' '\12' '\123' '\x0' '\x41' '\X4A'
 
-/* 12 字符串常量：普通、空串、带简单转义 */
+/* 12 字符串常量：普通、空串、带转义的字符串 */
 "hello" "" "hello world" "line\nnext" "tab\tvalue" "backslash\\value"
 
 /* 13 算术运算符 */
@@ -58,11 +61,10 @@ identifier _private value1 Mixed_Case_2026
 ( ) [ ] { } ; ,
 
 /* 18 行注释和块注释：分析结果中应被预处理阶段移除 */
-before_line_comment // 此行后半部分会被删除
-after_line_comment
-before_block_comment /* 可以跨行
-并在下一行结束 */ after_block_comment
+comment // 此行后半部分会被删除
+comment
+comment /* 可以跨行
+下一行 */ comment
 
-/* 19 空格、制表符和空行均会被跳过 */
-space_test	 tab_test
+
 
