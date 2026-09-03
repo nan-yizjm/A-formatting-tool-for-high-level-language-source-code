@@ -76,12 +76,12 @@ Choosefile:
 				getchar(); getchar();
 				return 0;
 			}
-			mid_fp = fopen("../output/C_mid_file.txt", "r");
+			rewind(fp);  //词法分析直接扫描替换前的源文件，而不是预编译后的中间文件
 			line_num = 1;  //行数初始化为1
 			CLEAR_SCREEN();
 			printf("\n");
 			printf("	单词类别				单词值\n");
-			while ((w = gettoken(mid_fp)) != EOF)
+			while ((w = gettoken(fp)) != EOF)
 			{
 				if (w >= AUTO && w <= DEFINE)
 				{
@@ -214,7 +214,6 @@ Choosefile:
 				}
 			}
 			fclose(fp);
-			fclose(mid_fp);
 			printf("\n按任意键继续...");
 			getchar();
 			break;
