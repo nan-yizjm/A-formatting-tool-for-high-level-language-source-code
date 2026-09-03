@@ -11,6 +11,11 @@ queue<print> printList; //用于方便打印缩进
 static int last_expression_end = -1;
 
 enum SemanticType { SEM_UNKNOWN, SEM_CHAR, SEM_INT, SEM_FLOAT, SEM_DOUBLE, SEM_VOID };
+struct ExpressionSemantic {
+	SemanticType type;
+	int modifiable;
+	int is_array;
+};
 struct VariableSemanticInfo {
 	std::string name;
 	SemanticType type;
@@ -66,6 +71,12 @@ static SemanticType common_arithmetic_type(SemanticType left, SemanticType right
 	if (left == SEM_FLOAT || right == SEM_FLOAT) return SEM_FLOAT;
 	if (left == SEM_INT || right == SEM_INT) return SEM_INT;
 	return SEM_CHAR;
+}
+
+static int is_assignment_operator(const char* op)
+{
+	return !strcmp(op, "=") || !strcmp(op, "+=") || !strcmp(op, "-=") ||
+		!strcmp(op, "*=") || !strcmp(op, "/=") || !strcmp(op, "%=");
 }
 
 static int is_type_token(int token)
@@ -737,7 +748,7 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 	//已经读入了第一个单词在w中
 	SqStack op;		//运算符栈
 	SqStack opn;	//操作数栈
-	std::stack<SemanticType> type_stack;
+	std::stack<ExpressionSemantic> semantic_stack;
 	CTree* node = (CTree*)malloc(sizeof(CTree));
 	CTree* child1 = (CTree*)malloc(sizeof(CTree));
 	CTree* child2 = (CTree*)malloc(sizeof(CTree));
@@ -761,12 +772,19 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 			|| w == LONG_DOUBLE_CONST || w == CHAR_CONST)
 		{
 			SemanticType operand_type = SEM_UNKNOWN;
+			ExpressionSemantic operand_semantic = { SEM_UNKNOWN, 0, 0 };
 			int operand_was_identifier = w == IDENT;
 			std::string operand_name = token_text;
-			if (operand_was_identifier) operand_type = find_variable_type(token_text);
+			if (operand_was_identifier) {
+				const VariableSemanticInfo* variable = find_variable_info(token_text);
+				operand_type = variable ? variable->type : SEM_UNKNOWN;
+				operand_semantic.modifiable = 1;
+				operand_semantic.is_array = variable ? variable->is_array : 0;
+			}
 			else if (w == FLOAT_CONST) operand_type = SEM_FLOAT;
 			else if (w == DOUBLE_CONST || w == LONG_DOUBLE_CONST) operand_type = SEM_DOUBLE;
 			else operand_type = SEM_INT;
+			operand_semantic.type = operand_type;
 			node = (CTree*)malloc(sizeof(CTree));
 			node->n = 1; node->r = 0;
 			node->nodes[0].data = (char*)malloc((strlen(token_text) + strlen("ID: ") + 1) * sizeof(char));
@@ -798,6 +816,7 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 					node = call_node;
 					const FunctionSemanticInfo* function = find_function_info(operand_name.c_str());
 					operand_type = function ? function->return_type : SEM_UNKNOWN;
+					operand_semantic = { operand_type, 0, 0 };
 				}
 				else {
 					CTree index_expression;
@@ -814,11 +833,12 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 					node = access_node;
 					const VariableSemanticInfo* variable = find_variable_info(operand_name.c_str());
 					operand_type = variable ? variable->type : SEM_UNKNOWN;
+					operand_semantic = { operand_type, 1, 0 };
 					w = gettoken(fp);
 				}
 			}
 			Push(opn, node);			//根据w生成一个结点，结点指针进栈opn
-			type_stack.push(operand_type);
+			semantic_stack.push(operand_semantic);
 		}
 		else if (w == PLUS || w == MINUS || w == MULTIPLY || w == DIVIDE ||
 			w == MOD || w == LS || w == RS || ((w>=MORE)&&(w<= LESS_EQUAL)) || w == EQUAL_TO ||
@@ -844,9 +864,10 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 				w = gettoken(fp);
 				break;   //去括号
 			case '>': {
-				SemanticType right_type = SEM_UNKNOWN, left_type = SEM_UNKNOWN;
-				if (!type_stack.empty()) { right_type = type_stack.top(); type_stack.pop(); }
-				if (!type_stack.empty()) { left_type = type_stack.top(); type_stack.pop(); }
+				ExpressionSemantic right_semantic = { SEM_UNKNOWN, 0, 0 };
+				ExpressionSemantic left_semantic = { SEM_UNKNOWN, 0, 0 };
+				if (!semantic_stack.empty()) { right_semantic = semantic_stack.top(); semantic_stack.pop(); }
+				if (!semantic_stack.empty()) { left_semantic = semantic_stack.top(); semantic_stack.pop(); }
 				if (!Pop(opn, child2)) error++;
 				if (!Pop(opn, child1)) error++;
 				if (!Pop(op, node)) error++;
@@ -855,15 +876,20 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 				InsertChild(*node, node->r, 1, *child1);
 				InsertChild(*node, node->r, 2, *child2);
 				Push(opn, node);
-				if (!strcmp(node->nodes[0].data, "=") ||
-					(node->nodes[0].data[1] == '=' && strchr("+-*/%", node->nodes[0].data[0])))
-					type_stack.push(left_type);
+				if (is_assignment_operator(node->nodes[0].data)) {
+					if (!left_semantic.modifiable) {
+						strcpy(parser_error, "赋值左侧必须是可修改对象");
+						error = 1;
+					}
+					semantic_stack.push({ left_semantic.type, 0, 0 });
+				}
 				else if (!strcmp(node->nodes[0].data, "==") || !strcmp(node->nodes[0].data, "!=") ||
 					!strcmp(node->nodes[0].data, ">") || !strcmp(node->nodes[0].data, "<") ||
 					!strcmp(node->nodes[0].data, ">=") || !strcmp(node->nodes[0].data, "<=") ||
 					!strcmp(node->nodes[0].data, "&&") || !strcmp(node->nodes[0].data, "||"))
-					type_stack.push(SEM_INT);
-				else type_stack.push(common_arithmetic_type(left_type, right_type));
+					semantic_stack.push({ SEM_INT, 0, 0 });
+				else semantic_stack.push({
+					common_arithmetic_type(left_semantic.type, right_semantic.type), 0, 0 });
 				break;
 			}
 			default:
@@ -888,18 +914,14 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 	if (error) return ERROR;
 	GetTop(opn, node);
 	InsertChild(T, T.r, 1, *node);
-	if (!type_stack.empty()) last_expression_type = type_stack.top();
+	if (!semantic_stack.empty()) last_expression_type = semantic_stack.top().type;
 	return OK;
 }
 
 char precede(char* a, char* b)
 {
-	auto is_assignment = [](const char* op) {
-		return !strcmp(op, "=") || !strcmp(op, "+=") || !strcmp(op, "-=") ||
-			!strcmp(op, "*=") || !strcmp(op, "/=") || !strcmp(op, "%=");
-	};
 	auto priority = [&](const char* op) {
-		if (is_assignment(op)) return 1;
+		if (is_assignment_operator(op)) return 1;
 		if (!strcmp(op, "||")) return 2;
 		if (!strcmp(op, "&&")) return 3;
 		if (!strcmp(op, "==") || !strcmp(op, "!=")) return 4;
@@ -923,7 +945,7 @@ char precede(char* a, char* b)
 	if (left_priority < 0 || right_priority < 0) return '?';
 	if (left_priority < right_priority) return '<';
 	if (left_priority > right_priority) return '>';
-	return is_assignment(a) ? '<' : '>';
+	return is_assignment_operator(a) ? '<' : '>';
 }
 
 status PrintTree(char* data, int indent) //打印函数
