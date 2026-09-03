@@ -35,6 +35,7 @@ static std::vector<VariableSemanticInfo> semantic_variables;
 static std::vector<FunctionSemanticInfo> semantic_functions;
 static std::vector<SemanticType> current_parameter_types;
 static SemanticType last_expression_type = SEM_UNKNOWN;
+static ExpressionSemantic last_expression_semantic = { SEM_UNKNOWN, 0, 0, 0 };
 static SemanticType current_function_return_type = SEM_UNKNOWN;
 static int current_type_is_const = 0;
 static int semantic_scope_depth = 0;
@@ -831,6 +832,7 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 	int error = 0;
 	last_expression_end = -1;
 	last_expression_type = SEM_UNKNOWN;
+	last_expression_semantic = { SEM_UNKNOWN, 0, 0, 0 };
 	node->n = 1; node->r = 0; //设立起止符号
 	node->nodes[0].data = (char*)malloc((strlen("#") + 1) * sizeof(char));
 	strcpy(node->nodes[0].data, "#");
@@ -869,6 +871,7 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 			while (operand_was_identifier && (w == LS || w == LM)) {
 				if (w == LS) {
 					used_as_function_call = 1;
+					std::vector<ExpressionSemantic> arguments;
 					CTree* call_node = (CTree*)malloc(sizeof(CTree));
 					call_node->n = 1; call_node->r = 0;
 					std::string label = "函数调用：" + operand_name;
@@ -881,6 +884,7 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 					while (w != RS) {
 						CTree argument;
 						if (!exp(fp, argument, RS, COMMA)) return ERROR;
+						arguments.push_back(last_expression_semantic);
 						if (!InsertChild(*call_node, call_node->r, argument_position++, argument)) return ERROR;
 						int delimiter = last_expression_end;
 						if (delimiter == RS) break;
@@ -892,6 +896,17 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 					if (!function) {
 						strcpy(parser_error, "调用了未声明的函数");
 						return ERROR;
+					}
+					if (arguments.size() != function->parameter_types.size()) {
+						strcpy(parser_error, "函数实参数量与形参不匹配");
+						return ERROR;
+					}
+					for (size_t i = 0; i < arguments.size(); i++) {
+						if (arguments[i].is_array || arguments[i].type == SEM_VOID ||
+							arguments[i].type != function->parameter_types[i]) {
+							strcpy(parser_error, "函数实参类型与形参不匹配");
+							return ERROR;
+						}
 					}
 					operand_type = function->return_type;
 					operand_semantic = { operand_type, 0, 0, 0 };
@@ -1026,7 +1041,10 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 	if (error) return ERROR;
 	GetTop(opn, node);
 	InsertChild(T, T.r, 1, *node);
-	if (!semantic_stack.empty()) last_expression_type = semantic_stack.top().type;
+	if (!semantic_stack.empty()) {
+		last_expression_semantic = semantic_stack.top();
+		last_expression_type = last_expression_semantic.type;
+	}
 	return OK;
 }
 
