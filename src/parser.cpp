@@ -280,6 +280,14 @@ status VarList(FILE* fp, CTree& T)  //语法单位<变量序列>子程序
 			return ERROR;
 		}
 	}
+	if (semantic_scope_depth == 0) {
+		for (const auto& function : semantic_functions) {
+			if (function.name == declared_name) {
+				strcpy(parser_error, "变量名与函数名冲突");
+				return ERROR;
+			}
+		}
+	}
 	semantic_variables.push_back({ declared_name, declared_type, declared_as_array,
 		declared_as_const, semantic_scope_depth });
 	if (w == EQUAL_TO) {
@@ -319,6 +327,12 @@ status funcDef(FILE* fp, CTree& T)  //语法单位<函数定义>子程序
 	SemanticType function_return_type = semantic_type_from_spelling(kind);
 	std::string function_name = tokenText0;
 	current_parameter_types.clear();
+	for (const auto& variable : semantic_variables) {
+		if (variable.scope_depth == 0 && variable.name == function_name) {
+			strcpy(parser_error, "变量名与函数名冲突");
+			return ERROR;
+		}
+	}
 	semantic_scope_depth++;
 	T.n = 1; T.r = 0;		//生成函数定义结点T
 	T.nodes[0].data = (char*)malloc((strlen("函数定义：") + 1) * sizeof(char));
