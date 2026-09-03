@@ -432,6 +432,12 @@ status FormParDef(FILE* fp, CTree& T)  //语法单位<形参>子程序
 	InsertChild(T, T.r, 2, p);
 	SemanticType parameter_type = semantic_type_from_spelling(kind);
 	current_parameter_types.push_back(parameter_type);
+	for (const auto& variable : semantic_variables) {
+		if (variable.scope_depth == semantic_scope_depth && variable.name == parameter_name) {
+			strcpy(parser_error, "函数形参名称重复");
+			return ERROR;
+		}
+	}
 	semantic_variables.push_back({ parameter_name, parameter_type, 0,
 		current_type_is_const, semantic_scope_depth });
 	return OK;
