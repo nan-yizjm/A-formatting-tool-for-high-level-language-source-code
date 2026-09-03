@@ -171,9 +171,9 @@ status pre_process(FILE* fp, const char* source_path) {
 			}
 			else if (w == ERROR_TOKEN) {
 				if (pre_line_num != line_num) {
-					fprintf(mid_fp, "\n%s", token_text);
+					fprintf(mid_fp, "\n%s ", token_text);
 				}
-				else { fprintf(mid_fp, "%s", token_text); }
+				else { fprintf(mid_fp, "%s ", token_text); }
 			}
 			else {
 				if (pre_line_num != line_num) {
