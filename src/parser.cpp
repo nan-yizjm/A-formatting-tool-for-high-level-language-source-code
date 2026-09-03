@@ -886,7 +886,11 @@ status exp(FILE* fp, CTree& T, int endsym, int alt_endsym)//语法单位<表达�
 				InsertChild(*node, node->r, 2, *child2);
 				Push(opn, node);
 				if (is_assignment_operator(node->nodes[0].data)) {
-					if (!left_semantic.modifiable) {
+					if (left_semantic.is_array) {
+						strcpy(parser_error, "数组不能整体参与赋值");
+						error = 1;
+					}
+					else if (!left_semantic.modifiable) {
 						strcpy(parser_error, left_semantic.is_const ?
 							"const对象不能赋值" : "赋值左侧必须是可修改对象");
 						error = 1;
