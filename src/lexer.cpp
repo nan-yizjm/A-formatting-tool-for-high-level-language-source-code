@@ -10,6 +10,19 @@ keyword n[IDENT] = {
 	{"include",INCLUDE},{"define",DEFINE}
 };
 
+static int finish_invalid_char_constant(FILE* fp, int c, int i)
+{
+	while (c != '\'' && c != '\n' && c != EOF) {
+		token_text[i++] = (char)c;
+		c = fgetc(fp);
+	}
+	if (c == '\'') token_text[i++] = (char)c;
+	else if (c == '\n') ungetc(c, fp);
+	token_text[i] = '\0';
+	strcpy(token_error, "非法字符常量");
+	return ERROR_TOKEN;
+}
+
 int gettoken(FILE* fp) {
 	int c; //必须使用int，才能可靠地区分所有字符和EOF
 	int i=0; //用于做token_text的存储
@@ -487,10 +500,10 @@ station2://临时判断是否是*/的情况
 					token_text[i] = '\0';
 					return CHAR_CONST;
 				}
-				else goto stationERROR;
+				else return finish_invalid_char_constant(fp, c, i);
 			}
 			else if (c == '8' || c == '9') {
-				goto stationERROR;
+				return finish_invalid_char_constant(fp, c, i);
 			}
 			else if (c == '\'') {  //判断'\''的情况
 				token_text[i++] = c;
@@ -500,14 +513,14 @@ station2://临时判断是否是*/的情况
 					token_text[i] = '\0';
 					return CHAR_CONST;
 				}
-				else goto stationERROR;
+				else return finish_invalid_char_constant(fp, c, i);
 			}
 			else if (c == 'x' || c == 'X') {  //十六进制转义至少包含一个十六进制数字
 				token_text[i++] = c;
 				c = fgetc(fp);
 				if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
 					(c >= 'A' && c <= 'F'))) {
-					goto stationERROR;
+					return finish_invalid_char_constant(fp, c, i);
 				}
 				do {
 					token_text[i++] = c;
@@ -519,7 +532,7 @@ station2://临时判断是否是*/的情况
 					token_text[i] = '\0';
 					return CHAR_CONST;
 				}
-				goto stationERROR;
+				return finish_invalid_char_constant(fp, c, i);
 			}
 			else if (strchr("\"?\\abfnrtv", c) != NULL) {  //标准简单转义字符
 				token_text[i++] = c;
@@ -529,19 +542,10 @@ station2://临时判断是否是*/的情况
 					token_text[i] = '\0';
 					return CHAR_CONST;
 				}
-				else { 
-					do {
-						token_text[i++] = c;
-						c = fgetc(fp);
-					} while (c != '\'' && c != '\n'&& c!=EOF); //添加智能识别功能，防止无限报错【亮点】
-					if (c == '\'') {
-						return ERROR_TOKEN;
-					}
-					else goto stationERROR; 
-				}
+				else return finish_invalid_char_constant(fp, c, i);
 			}
 			else {
-				goto stationERROR;
+				return finish_invalid_char_constant(fp, c, i);
 			}
 		}
 		else if (c == '\'') {  //判断'''的情况
@@ -557,16 +561,7 @@ station2://临时判断是否是*/的情况
 				token_text[i] = '\0';
 				return CHAR_CONST;
 			}
-			else {
-				do {
-					token_text[i++] = c;
-					c = fgetc(fp);
-				} while (c != '\'' && c != '\n' && c != EOF); //添加智能识别功能，防止无限报错【亮点】
-				if (c == '\'') {
-					return ERROR_TOKEN;
-				}
-				else goto stationERROR;
-			}
+			else return finish_invalid_char_constant(fp, c, i);
 		}
 
 	case'"':
