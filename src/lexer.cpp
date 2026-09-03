@@ -141,6 +141,9 @@ stationE:  //e/E的情况
 			}
 
 		}
+		else if (c == 'e' || c == 'E') {
+			goto stationE;
+		}
 		else if (c == 'u' || c == 'U') {
 			goto stationA;
 		}
@@ -198,6 +201,7 @@ stationERROR:
 			}
 		}
 		else if (c == '.') goto station1;
+		else if (c == 'e' || c == 'E') goto stationE;
 		else if (c == 'u' || c == 'U') goto stationA;
 		else if (c == 'l' || c == 'L') goto stationB;
 		else if ((c >= 'a' && c <= 'z' ) || (c >= 'A' && c <= 'Z' ) || c == '_' || (c >= '8' && c <= '9')) goto stationERROR;
