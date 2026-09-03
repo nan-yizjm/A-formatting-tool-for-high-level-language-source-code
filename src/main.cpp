@@ -240,6 +240,7 @@ Choosefile:
 			if (!program(mid_fp, T))
 			{
 				printf("发生生成错误！错误行号：%d\n", line_num);
+				if (parser_error[0]) printf("错误原因：%s\n", parser_error);
 				printf("按任意键继续...\n");
 				getchar(); 
 				break;

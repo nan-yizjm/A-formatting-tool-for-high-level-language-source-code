@@ -3,12 +3,14 @@
 int w;  //获得gettoken函数的返回值即读入的单词种类编码
 char kind[100]; //储存类型关键字
 char tokenText0[100]; //储存第一个函数名或者变量名
+char parser_error[100]; //储存语法错误说明
 int indent0 = 0;  //初始化缩进值
 queue<print> printList; //用于方便打印缩进
 
 status program(FILE* fp, CTree& T)  //语法单位<程序>的子程序
 {
 	CTree c;
+	parser_error[0] = '\0';
 	indent0 = 0;                       //重置缩进值，防止多次运行之间状态泄漏
 	while (!printList.empty()) printList.pop();  //清空打印队列
 	struct print elem = { indent0,line_num };
@@ -117,7 +119,10 @@ status VarList(FILE* fp, CTree& T)  //语法单位<变量序列>子程序
 		c.nodes[0].firstchild = NULL;
 	}
 	if (!InsertChild(T, T.r, 1, c))	return ERROR;//识别的变量结点作为T的第一个孩子
-	if (w != COMMA && w != SEMI) return ERROR;
+	if (w != COMMA && w != SEMI) {
+		strcpy(parser_error, "变量声明缺少分号或逗号");
+		return ERROR;
+	}
 	if (w == SEMI)								//如果标识符后是分号，直接结束
 	{
 		w = gettoken(fp);
@@ -525,7 +530,10 @@ status Statement(FILE* fp, CTree& T)  //语法单位<语句>子程序
 		T.nodes[0].indent = 1;
 		T.nodes[0].firstchild = NULL;
 		w = gettoken(fp);
-		if (w != SEMI) return ERROR;
+		if (w != SEMI) {
+			strcpy(parser_error, "continue语句缺少分号");
+			return ERROR;
+		}
 		w = gettoken(fp);
 		return OK;
 	}
@@ -536,7 +544,10 @@ status Statement(FILE* fp, CTree& T)  //语法单位<语句>子程序
 		T.nodes[0].indent = 1;
 		T.nodes[0].firstchild = NULL;
 		w = gettoken(fp);
-		if (w != SEMI) return ERROR;
+		if (w != SEMI) {
+			strcpy(parser_error, "break语句缺少分号");
+			return ERROR;
+		}
 		w = gettoken(fp);
 		return OK;
 	}
@@ -553,12 +564,7 @@ status Statement(FILE* fp, CTree& T)  //语法单位<语句>子程序
 		InsertChild(T, T.r, 1, c);
 		return OK;
 	}
-	else if (w == LS) {
-		if (!exp(fp, T, RS)) return ERROR;
-		w = gettoken(fp);
-		return OK;
-	}
-	else if (w == IDENT || w == INT_CONST || w == UNSIGNED_CONST || w == LONG_CONST || w == UNSIGNED_LONG_CONST || w == DOUBLE_CONST || w == FLOAT_CONST || w == LONG_DOUBLE_CONST || w == CHAR_CONST) {
+	else if (w == LS || w == IDENT || w == INT_CONST || w == UNSIGNED_CONST || w == LONG_CONST || w == UNSIGNED_LONG_CONST || w == DOUBLE_CONST || w == FLOAT_CONST || w == LONG_DOUBLE_CONST || w == CHAR_CONST) {
 		if (!exp(fp, T, SEMI)) return ERROR;
 		w = gettoken(fp);
 		return OK;
@@ -653,7 +659,11 @@ status exp(FILE* fp, CTree& T, int endsym)//语法单位<表达式>子程序
 			}
 		}
 		else if (w == endsym) w = POUND;//遇到结束标记分号，w被替换成#
-		else error = 1;
+		else {
+			if (endsym == SEMI && (w == RL || w == EOF))
+				strcpy(parser_error, "表达式语句缺少分号");
+			error = 1;
+		}
 		GetTop(op, node);
 	}
 	if (error) return ERROR;

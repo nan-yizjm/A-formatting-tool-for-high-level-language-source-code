@@ -19,6 +19,7 @@ extern queue<print> printList;		//存储各个打印格式单元
 extern int w;						//获得gettoken函数的返回值即读入的单词种类编码
 extern char kind[100];			    //存取类型关键字
 extern char tokenText0[100];		//存取变量名或函数名
+extern char parser_error[100];		//存取语法错误说明
 
 status program(FILE* fp, CTree& T); //语法单位<程序>的子程序
 status ExtDefList(FILE* fp, CTree& T);//语法单位<外部定义序列>的子程序
