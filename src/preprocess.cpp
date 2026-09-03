@@ -28,7 +28,16 @@ static status expand_include(FILE* output, const char* header_text,
 	if (!header_fp) return ERROR;
 
 	int c;
-	while ((c = fgetc(header_fp)) != EOF) fputc(c, output);
+	while ((c = fgetc(header_fp)) != EOF) {
+		// include指令在原文件中只占一行；压平演示头，避免后续报错行号偏移。
+		if (c == '\r') {
+			int next = fgetc(header_fp);
+			if (next != '\n' && next != EOF) ungetc(next, header_fp);
+			fputc(' ', output);
+		}
+		else if (c == '\n') fputc(' ', output);
+		else fputc(c, output);
+	}
 	fputc('\n', output);
 	fclose(header_fp);
 	return OK;
