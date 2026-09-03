@@ -86,20 +86,20 @@ status pre_process(FILE* fp, const char* source_path) {
 					else return ERROR;
 				}
 				else if (w == LESS) {
-					w = gettoken(fp);
-					a = line_num;
-					if (w != IDENT)return ERROR;
-					else {
-						char header_name[100];
-						strcpy(header_name, token_text);
-						w = gettoken(fp);
-						b = line_num;
-						if (w != MORE)return ERROR;
-						if (a != b)return ERROR;
-						if (!expand_include(mid_fp, header_name, source_path, 0)) return ERROR;
-						if ((container = fgetc(fp)) != ';') { ungetc(container, fp); w = gettoken(fp); pre_line_num = line_num; continue; }
-						else return ERROR;
+					char header_name[100];
+					int header_length = 0;
+					int header_char;
+					while ((header_char = fgetc(fp)) != EOF && header_char != '>' &&
+						header_char != '\n') {
+						if (header_length >= 99) return ERROR;
+						header_name[header_length++] = (char)header_char;
 					}
+					header_name[header_length] = '\0';
+					if (header_char != '>' || header_length == 0) return ERROR;
+					strcpy(data_Inculd[j++].string, header_name);
+					if (!expand_include(mid_fp, header_name, source_path, 0)) return ERROR;
+					if ((container = fgetc(fp)) != ';') { ungetc(container, fp); w = gettoken(fp); pre_line_num = line_num; continue; }
+					else return ERROR;
 				}
 			}
 			else return ERROR;
