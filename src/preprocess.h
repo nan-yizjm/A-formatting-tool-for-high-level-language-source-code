@@ -19,4 +19,4 @@ typedef struct include_data {  //用于储存include头文件定义数据
 extern define_data data_Def[10];//用于储存define宏定义的内容
 extern include_data data_Inculd[10];//用于储存include文件包含的内容
 extern int data_Def_num;
-status pre_process(FILE* fp);
+status pre_process(FILE* fp, const char* source_path);

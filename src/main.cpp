@@ -65,7 +65,7 @@ Choosefile:
 			break; 
 			}
 			printf("...正在预编译文件...\n");
-			if (pre_process(fp))
+			if (pre_process(fp, filename))
 			{
 				printf("预编译成功！按任意键继续...\n");
 				getchar(); getchar();
@@ -216,7 +216,7 @@ Choosefile:
 			printf("...正在预编译文件...\n");
 			line_num = 1;  //行数初始化为1
 			fp = fopen(filepath, "r");
-			if (pre_process(fp))
+			if (pre_process(fp, filename))
 			{
 				printf("预编译成功！按任意键继续...\n");
 				getchar(); getchar();
@@ -246,7 +246,7 @@ Choosefile:
 		case 3:
 			line_num = 1;  //行数初始化为1
 			fp = fopen(filepath, "r");
-			if (!pre_process(fp))
+			if (!pre_process(fp, filename))
 			{
 				printf("预编译失败！退出系统！请检查错误！\n");
 				getchar(); getchar();
