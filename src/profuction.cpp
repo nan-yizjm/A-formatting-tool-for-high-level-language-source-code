@@ -87,7 +87,7 @@ status TraverseTree(CTree T, status(*visit)(char*, int))
 	int indent = 0;							//缩进量
 	int parent;
 	CNode t;
-	int visited[100] = { 0 };		//访问标志数组初始化
+	int visited[1000] = { 0 };		//与CTree的结点容量保持一致
 	if (!T.n) return OK;					//树为空直接结束
 	for (i = 0; i < T.n; i++)
 	{
