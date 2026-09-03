@@ -358,6 +358,14 @@ status funcDef(FILE* fp, CTree& T)  //语法单位<函数定义>子程序
 	if (!InsertChild(T, T.r, 2, p)) return ERROR;
 	w = gettoken(fp);
 	if (w != SEMI && w != LL) return ERROR;
+	if (w == LL) {
+		for (const auto& function : semantic_functions) {
+			if (function.name == function_name && function.is_definition) {
+				strcpy(parser_error, "函数重复定义");
+				return ERROR;
+			}
+		}
+	}
 	semantic_functions.push_back({ function_name, function_return_type,
 		current_parameter_types, w == LL });
 	if (w == SEMI) {
