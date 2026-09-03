@@ -115,6 +115,10 @@ stationD: //l/L后缀（double）
 stationE:  //e/E的情况
 				token_text[i++] = c;
 				c = fgetc(fp);
+				if (c == '+' || c == '-') {
+					token_text[i++] = c;
+					c = fgetc(fp);
+				}
 				if (c >= '0' && c <= '9') {
 					do {
 						token_text[i++] = c;
