@@ -26,27 +26,38 @@ const std::unordered_map<std::string, TokenKind> KEYWORDS = {
     {"volatile", TokenKind::KwVolatile}, {"while", TokenKind::KwWhile}
 };
 
+// 判断字符能否作为标识符的首字符。
+// 课程工具遵循C语言常见规则：首字符只能是英文字母或下划线。
 bool identifierStart(char c)
 {
     return std::isalpha(static_cast<unsigned char>(c)) != 0 || c == '_';
 }
 
+// 判断字符能否作为标识符的后续字符。
+// 与首字符相比，后续位置额外允许数字，例如value1。
 bool identifierPart(char c)
 {
     return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_';
 }
 }
 
+// 保存待扫描的源代码并初始化扫描状态。
+// current_从0开始，line_和column_从源文件左上角的1:1开始计数。
 SourceLexer::SourceLexer(std::string source) : source_(std::move(source)) {}
 
+// 判断扫描位置是否已经到达源代码末尾。
 bool SourceLexer::atEnd() const { return current_ >= source_.size(); }
 
+// 查看后续字符而不移动扫描位置。
+// 超出源代码范围时返回'\0'，使调用方不必每次都手动检查越界。
 char SourceLexer::peek(std::size_t offset) const
 {
     const std::size_t position = current_ + offset;
     return position < source_.size() ? source_[position] : '\0';
 }
 
+// 读取一个字符并同步更新行号、列号和行首状态。
+// lineHasOnlyWhitespace_用于判断#是否位于一行开头，从而识别预处理指令。
 char SourceLexer::advance()
 {
     if (atEnd()) return '\0';
@@ -66,6 +77,8 @@ char SourceLexer::advance()
     return c;
 }
 
+// 若下一个字符匹配则读取它，否则保持当前位置不变。
+// 该函数用于识别==、!=、>=、&&等由两个字符组成的运算符。
 bool SourceLexer::match(char expected)
 {
     if (atEnd() || peek() != expected) return false;
@@ -73,6 +86,8 @@ bool SourceLexer::match(char expected)
     return true;
 }
 
+// 从起点到当前位置截取原文并加入Token序列。
+// Token保留行列和原始拼写，错误诊断和格式化显示都依赖这些信息。
 void SourceLexer::add(TokenKind kind, std::size_t start, int line, int column,
                       const std::string& message)
 {
@@ -80,6 +95,8 @@ void SourceLexer::add(TokenKind kind, std::size_t start, int line, int column,
                        line, column, message});
 }
 
+// 扫描标识符，并根据关键字表确定最终类别。
+// 若文本在KEYWORDS中则生成关键字Token，否则生成普通标识符Token。
 void SourceLexer::scanIdentifier(std::size_t start, int line, int column)
 {
     while (identifierPart(peek())) advance();
@@ -89,10 +106,12 @@ void SourceLexer::scanIdentifier(std::size_t start, int line, int column)
         start, line, column);
 }
 
+// 扫描整数或浮点常量，同时识别常见的数字书写错误。
+// 支持十进制、八进制、十六进制、科学计数法和常见的u/l/f后缀。
 void SourceLexer::scanNumber(std::size_t start, int line, int column)
 {
-    // 数字扫描按“十六进制”与“十/八进制及浮点数”两条路径处理。
-    // 即使发现错误也会读完当前数字，避免一个错误拆成多个无关Token。
+    // 以0x或0X开头的十六进制常量单独处理，其他数字走十/八进制及浮点路径。
+    // 即使发现错误也会读完当前数字，避免一个错误拆成多个无关Token和诊断。
     bool floating = source_[start] == '.';
     bool invalid = false;
     std::string message;
@@ -178,9 +197,12 @@ void SourceLexer::scanNumber(std::size_t start, int line, int column)
         start, line, column, message);
 }
 
+// 扫描字符串或字符常量，并验证引号和字符长度。
+// quote参数决定当前处理双引号字符串还是单引号字符常量。
 void SourceLexer::scanQuoted(std::size_t start, int line, int column, char quote)
 {
     // 反斜杠和其后的字符合起来算一个逻辑字符；反斜杠换行不计入。
+    // 因此'\\n'是合法字符常量，而'abc'会因逻辑字符数大于1被拒绝。
     bool closed = false;
     int logicalCharacters = 0;
     while (!atEnd())
@@ -234,12 +256,16 @@ void SourceLexer::scanQuoted(std::size_t start, int line, int column, char quote
     }
 }
 
+// 扫描从双斜杠开始到行末的行注释。
+// 换行符留给主扫描循环处理，以便行号能够正确递增。
 void SourceLexer::scanLineComment(std::size_t start, int line, int column)
 {
     while (!atEnd() && peek() != '\n') advance();
     add(TokenKind::LineComment, start, line, column);
 }
 
+// 扫描块注释，并在缺少结束符时生成错误Token。
+// 块注释允许跨行，advance()会自动维护跨行后的行号和列号。
 void SourceLexer::scanBlockComment(std::size_t start, int line, int column)
 {
     bool closed = false;
@@ -257,6 +283,8 @@ void SourceLexer::scanBlockComment(std::size_t start, int line, int column)
         start, line, column, closed ? "" : "块注释缺少结束符*/");
 }
 
+// 扫描完整预处理指令并保留其原始文本。
+// 预处理指令不拆成普通Token，避免#include <stdio.h>中的尖括号干扰语法分析。
 void SourceLexer::scanPreprocessor(std::size_t start, int line, int column)
 {
     // 预处理内容不参与C子集语法分析，按整行原文保存；支持反斜杠续行。
@@ -277,6 +305,8 @@ void SourceLexer::scanPreprocessor(std::size_t start, int line, int column)
     add(TokenKind::Preprocessor, start, line, column);
 }
 
+// 根据当前首字符分派到对应的Token扫描逻辑。
+// 每次调用只产生一个有效Token、一个错误Token，或跳过一段空白。
 void SourceLexer::scanToken()
 {
     // 保存Token起点，再由各专用扫描函数推进current_到Token末尾。
@@ -348,6 +378,8 @@ void SourceLexer::scanToken()
     }
 }
 
+// 扫描整个源代码，并在结尾补充文件结束Token。
+// EOF让语法分析器能用统一方式检测输入结束和缺失的右括号等错误。
 std::vector<Token> SourceLexer::scan()
 {
     while (!atEnd()) scanToken();
@@ -355,6 +387,8 @@ std::vector<Token> SourceLexer::scan()
     return tokens_;
 }
 
+// 判断Token是否可作为课程子集中的基本类型关键字。
+// const、static等修饰词由解析器的typeModifier()在更高一层处理。
 bool isTypeKeyword(TokenKind kind)
 {
     switch (kind)
@@ -367,6 +401,8 @@ bool isTypeKeyword(TokenKind kind)
     }
 }
 
+// 将Token类别转换为供终端表格显示的中文名称。
+// 关键字统一显示为“关键字”，无需为每个关键字重复建立显示文本。
 const char* tokenKindName(TokenKind kind)
 {
     switch (kind)

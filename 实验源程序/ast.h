@@ -28,11 +28,15 @@ struct ASTNode
     int column;
     std::vector<std::unique_ptr<ASTNode>> children;
 
+    // 使用节点类别、内容和源位置创建一个AST节点。
+    // value通常保存类型名、标识符、常量或运算符，children保存语法结构关系。
     ASTNode(NodeKind nodeKind, std::string nodeValue = {},
             int sourceLine = 0, int sourceColumn = 0)
         : kind(nodeKind), value(std::move(nodeValue)),
           line(sourceLine), column(sourceColumn) {}
 
+    // 接管子节点所有权，并返回不拥有对象的观察指针。
+    // 调用方不得释放返回指针；子节点生命周期完全由父节点控制。
     ASTNode* add(std::unique_ptr<ASTNode> child)
     {
         // 返回观察指针便于调用者继续访问；所有权仍保存在children中。
@@ -44,6 +48,8 @@ struct ASTNode
 
 using ASTPtr = std::unique_ptr<ASTNode>;
 
+// 简化AST节点创建，统一返回独占所有权指针。
+// 解析器通过本函数统一构建节点，可避免漏填源位置或误用裸指针。
 inline ASTPtr makeNode(NodeKind kind, const std::string& value = {},
                        int line = 0, int column = 0)
 {
